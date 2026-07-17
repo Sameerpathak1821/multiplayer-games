@@ -39,6 +39,49 @@ body {
   border: 1px solid color-mix(in srgb, var(--color-line) 80%, transparent);
 }
 
+/* Emoji reaction burst: floats up from the bottom of the stage and fades. */
+@keyframes reaction-float {
+  0% {
+    transform: translateY(0) scale(0.6);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(-12%) scale(1.15);
+  }
+  100% {
+    transform: translateY(-320%) scale(1);
+    opacity: 0;
+  }
+}
+
+.reaction-float {
+  animation: reaction-float 2.4s ease-out forwards;
+}
+
+/* Countdown digit pop. */
+@keyframes countdown-pop {
+  0% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+  30% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.92);
+    opacity: 0;
+  }
+}
+
+.countdown-pop {
+  animation: countdown-pop 0.95s ease-out forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

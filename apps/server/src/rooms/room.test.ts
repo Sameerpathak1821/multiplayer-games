@@ -146,4 +146,96 @@ describe("Room", () => {
     room.handleMessage("a", { type: "leave" });
     expect(room.ownerSessionId).toBe("b");
   });
+
+  it("kick bans: the kicked session cannot rejoin", () => {
+    room.join(session("a"), new FakeSocket());
+    room.join(session("b"), new FakeSocket());
+    room.handleMessage("a", { type: "kick", sessionId: "b" });
+    expect(room.join(session("b"), new FakeSocket())).toBe("banned");
+  });
+
+  it("password-protected rooms reject wrong/missing passwords but not reconnects", () => {
+    const s1 = new FakeSocket();
+    room.join(session("a"), s1);
+    room.handleMessage("a", { type: "settings:set_password", password: "secret" });
+
+    expect(room.join(session("b"), new FakeSocket())).toBe("wrong_password");
+    expect(room.join(session("b"), new FakeSocket(), "nope")).toBe("wrong_password");
+    expect(room.join(session("b"), new FakeSocket(), "secret")).toBeNull();
+
+    // Existing member reconnecting doesn't need the password.
+    room.handleClose("a", s1);
+    expect(room.join(session("a"), new FakeSocket())).toBeNull();
+    expect(s1.lastState()).toBeDefined();
+  });
+
+  it("only the owner can set or clear the password", () => {
+    room.join(session("a"), new FakeSocket());
+    room.join(session("b"), new FakeSocket());
+    room.handleMessage("b", { type: "settings:set_password", password: "hax" });
+    expect(room.snapshot().hasPassword).toBe(false);
+  });
+
+  it("chat broadcasts to everyone and replays history to joiners", () => {
+    const s1 = new FakeSocket();
+    room.join(session("a"), s1);
+    room.handleMessage("a", { type: "chat:send", text: "hello!" });
+
+    const chats = s1.sent.filter((m) => m.type === "chat:message");
+    expect(chats).toHaveLength(1);
+    expect(chats[0]?.type === "chat:message" && chats[0].message.text).toBe("hello!");
+
+    const s2 = new FakeSocket();
+    room.join(session("b"), s2);
+    const history = s2.sent.find((m) => m.type === "chat:history");
+    expect(history?.type === "chat:history" && history.messages).toHaveLength(1);
+  });
+
+  it("rate-limits chat and tells the sender", () => {
+    const s1 = new FakeSocket();
+    room.join(session("a"), s1);
+    for (let i = 0; i < 7; i++) room.handleMessage("a", { type: "chat:send", text: `m${i}` });
+
+    const chats = s1.sent.filter((m) => m.type === "chat:message");
+    const errors = s1.sent.filter((m) => m.type === "error");
+    expect(chats).toHaveLength(5);
+    expect(errors.length).toBeGreaterThan(0);
+
+    // Window slides: after 5s more messages are allowed again.
+    vi.advanceTimersByTime(5001);
+    room.handleMessage("a", { type: "chat:send", text: "later" });
+    expect(s1.sent.filter((m) => m.type === "chat:message")).toHaveLength(6);
+  });
+
+  it("countdown runs 3-2-1 then launches and resets ready flags", () => {
+    const s1 = new FakeSocket();
+    const s2 = new FakeSocket();
+    room.join(session("a"), s1);
+    room.join(session("b"), s2);
+    room.handleMessage("a", { type: "ready:set", ready: true });
+    room.handleMessage("b", { type: "ready:set", ready: true });
+
+    room.handleMessage("a", { type: "countdown:start" });
+    vi.advanceTimersByTime(3000);
+
+    const ticks = s2.sent.filter((m) => m.type === "countdown").map((m) => m.type === "countdown" && m.n);
+    expect(ticks).toEqual([3, 2, 1]);
+    expect(s2.sent.some((m) => m.type === "lobby:launch")).toBe(true);
+    expect(room.snapshot().members.every((m) => !m.ready)).toBe(true);
+  });
+
+  it("countdown refuses to start unless everyone connected is ready, and only for the owner", () => {
+    const s1 = new FakeSocket();
+    const s2 = new FakeSocket();
+    room.join(session("a"), s1);
+    room.join(session("b"), s2);
+    room.handleMessage("a", { type: "ready:set", ready: true });
+
+    room.handleMessage("a", { type: "countdown:start" });
+    expect(s1.sent.some((m) => m.type === "countdown")).toBe(false);
+
+    room.handleMessage("b", { type: "ready:set", ready: true });
+    room.handleMessage("b", { type: "countdown:start" });
+    expect(s1.sent.some((m) => m.type === "countdown")).toBe(false);
+  });
 });

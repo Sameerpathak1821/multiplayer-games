@@ -41,10 +41,17 @@ export function attachRoomSockets(httpServer: HttpServer, manager: RoomManager):
       return;
     }
 
+    const password = url.searchParams.get("password") ?? undefined;
+
     wss.handleUpgrade(request, socket, head, (ws: WebSocket) => {
-      const err = room.join(session, ws);
+      const err = room.join(session, ws, password);
       if (err) {
-        ws.close(CLOSE_CODES.ROOM_FULL, "room full");
+        const closeFor = {
+          room_full: CLOSE_CODES.ROOM_FULL,
+          banned: CLOSE_CODES.BANNED,
+          wrong_password: CLOSE_CODES.WRONG_PASSWORD,
+        } as const;
+        ws.close(closeFor[err], err);
         return;
       }
 

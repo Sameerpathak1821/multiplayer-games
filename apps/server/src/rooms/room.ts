@@ -1,9 +1,12 @@
+import { randomUUID } from "node:crypto";
 import type { GuestSession } from "@gamehub/shared";
 import {
+  CHAT_HISTORY_SIZE,
   CLOSE_CODES,
+  type ChatMessage,
+  type ClientMessage,
   type RoomEventKind,
   type RoomSnapshot,
-  type ClientMessage,
   type ServerMessage,
 } from "@gamehub/shared";
 
@@ -19,19 +22,28 @@ interface Member {
   session: GuestSession;
   socket: MemberSocket | null;
   connected: boolean;
+  ready: boolean;
   joinedAt: number;
   graceTimer: ReturnType<typeof setTimeout> | null;
+  /** Timestamps of recent sends, for rate limiting. */
+  chatTimes: number[];
+  reactionTimes: number[];
 }
 
 export interface RoomOptions {
   maxPlayers: number;
   /** How long a disconnected member keeps their seat. */
   graceMs: number;
+  /** Delay between countdown ticks (shortened in tests). */
+  countdownTickMs?: number;
   /** Called when the last member is gone, so the manager can drop the room. */
   onEmpty: (code: string) => void;
 }
 
-export type JoinError = "room_full";
+export type JoinError = "room_full" | "banned" | "wrong_password";
+
+const CHAT_LIMIT = { max: 5, windowMs: 5000 };
+const REACTION_LIMIT = { max: 10, windowMs: 5000 };
 
 /**
  * One live room. Membership is keyed by sessionId (stable across reconnects),
@@ -42,7 +54,11 @@ export class Room {
   readonly createdAt = Date.now();
   lastActivityAt = Date.now();
   ownerSessionId: string | null = null;
+  password: string | null = null;
   private members = new Map<string, Member>();
+  private banned = new Set<string>();
+  private chatHistory: ChatMessage[] = [];
+  private countdownTimer: ReturnType<typeof setTimeout> | null = null;
   private opts: RoomOptions;
 
   constructor(code: string, opts: RoomOptions) {
@@ -54,9 +70,15 @@ export class Room {
     return this.members.size;
   }
 
-  join(session: GuestSession, socket: MemberSocket): JoinError | null {
+  join(session: GuestSession, socket: MemberSocket, password?: string): JoinError | null {
     this.touch();
+    if (this.banned.has(session.sessionId)) return "banned";
+
     const existing = this.members.get(session.sessionId);
+    // Existing members (reconnects) don't need the password again.
+    if (!existing && this.password !== null && password !== this.password) {
+      return "wrong_password";
+    }
 
     if (existing) {
       // Seat reclaim: a new connection for a known session supersedes the old
@@ -73,21 +95,27 @@ export class Room {
       existing.connected = true;
       existing.session = session;
       if (wasDisconnected) this.emitEvent("reconnected", session.sessionId);
+      this.sendTo(existing, { type: "chat:history", messages: this.chatHistory });
       this.broadcastState();
       return null;
     }
 
     if (this.members.size >= this.opts.maxPlayers) return "room_full";
 
-    this.members.set(session.sessionId, {
+    const member: Member = {
       session,
       socket,
       connected: true,
+      ready: false,
       joinedAt: Date.now(),
       graceTimer: null,
-    });
+      chatTimes: [],
+      reactionTimes: [],
+    };
+    this.members.set(session.sessionId, member);
     if (!this.ownerSessionId) this.ownerSessionId = session.sessionId;
     this.emitEvent("joined", session.sessionId);
+    this.sendTo(member, { type: "chat:history", messages: this.chatHistory });
     this.broadcastState();
     return null;
   }
@@ -106,6 +134,7 @@ export class Room {
         break;
       case "kick":
         if (sessionId !== this.ownerSessionId || msg.sessionId === sessionId) return;
+        this.banned.add(msg.sessionId);
         this.remove(msg.sessionId, "kicked");
         break;
       case "transfer_owner": {
@@ -117,6 +146,53 @@ export class Room {
         this.broadcastState();
         break;
       }
+      case "chat:send": {
+        if (!this.allowRate(member.chatTimes, CHAT_LIMIT)) {
+          this.sendTo(member, {
+            type: "error",
+            code: "rate_limited",
+            message: "You're sending messages too fast.",
+          });
+          return;
+        }
+        const text = msg.text.trim();
+        if (!text) return;
+        const message: ChatMessage = {
+          id: randomUUID(),
+          sessionId,
+          name: member.session.name,
+          avatarColor: member.session.avatarColor,
+          text,
+          at: Date.now(),
+        };
+        this.chatHistory = [...this.chatHistory.slice(-(CHAT_HISTORY_SIZE - 1)), message];
+        this.broadcast({ type: "chat:message", message });
+        break;
+      }
+      case "reaction:send": {
+        if (!this.allowRate(member.reactionTimes, REACTION_LIMIT)) return;
+        this.broadcast({
+          type: "reaction",
+          reaction: { sessionId, emoji: msg.emoji, at: Date.now() },
+        });
+        break;
+      }
+      case "ready:set":
+        member.ready = msg.ready;
+        this.broadcastState();
+        break;
+      case "countdown:start": {
+        if (sessionId !== this.ownerSessionId || this.countdownTimer) return;
+        const connected = [...this.members.values()].filter((m) => m.connected);
+        if (!connected.every((m) => m.ready)) return;
+        this.runCountdown(3);
+        break;
+      }
+      case "settings:set_password":
+        if (sessionId !== this.ownerSessionId) return;
+        this.password = msg.password;
+        this.broadcastState();
+        break;
     }
   }
 
@@ -134,6 +210,26 @@ export class Room {
     member.graceTimer = setTimeout(() => {
       this.remove(sessionId, "left");
     }, this.opts.graceMs);
+  }
+
+  private runCountdown(n: number): void {
+    if (n === 0) {
+      this.countdownTimer = null;
+      this.broadcast({ type: "lobby:launch" });
+      for (const m of this.members.values()) m.ready = false;
+      this.broadcastState();
+      return;
+    }
+    this.broadcast({ type: "countdown", n });
+    this.countdownTimer = setTimeout(() => this.runCountdown(n - 1), this.opts.countdownTickMs ?? 1000);
+  }
+
+  private allowRate(times: number[], limit: { max: number; windowMs: number }): boolean {
+    const now = Date.now();
+    while (times.length > 0 && now - times[0]! > limit.windowMs) times.shift();
+    if (times.length >= limit.max) return false;
+    times.push(now);
+    return true;
   }
 
   private remove(sessionId: string, reason: "left" | "kicked"): void {
@@ -168,6 +264,7 @@ export class Room {
       code: this.code,
       ownerSessionId: this.ownerSessionId,
       maxPlayers: this.opts.maxPlayers,
+      hasPassword: this.password !== null,
       members: [...this.members.values()]
         .sort((a, b) => a.joinedAt - b.joinedAt)
         .map((m) => ({
@@ -175,12 +272,14 @@ export class Room {
           name: m.session.name,
           avatarColor: m.session.avatarColor,
           connected: m.connected,
+          ready: m.ready,
         })),
     };
   }
 
   /** Tear down all timers/sockets (server shutdown or TTL sweep). */
   destroy(): void {
+    if (this.countdownTimer) clearTimeout(this.countdownTimer);
     for (const m of this.members.values()) {
       if (m.graceTimer) clearTimeout(m.graceTimer);
       m.socket?.close(1001, "room closed");

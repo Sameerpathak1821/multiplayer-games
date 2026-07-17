@@ -1,18 +1,33 @@
 import {
   FATAL_CLOSE_CODES,
   serverMessageSchema,
+  type ChatMessage,
   type ClientMessage,
+  type Reaction,
   type RoomEvent,
   type RoomSnapshot,
 } from "@gamehub/shared";
 
 export type ConnectionStatus = "connecting" | "connected" | "reconnecting";
 
-export type ClosedReason = "left" | "kicked" | "room_full" | "room_not_found" | "error";
+export type ClosedReason =
+  | "left"
+  | "kicked"
+  | "banned"
+  | "room_full"
+  | "room_not_found"
+  | "wrong_password"
+  | "error";
 
 export interface RoomHandlers {
   onState(room: RoomSnapshot, you: string): void;
   onEvent(event: RoomEvent): void;
+  onChat(message: ChatMessage): void;
+  onChatHistory(messages: ChatMessage[]): void;
+  onReaction(reaction: Reaction): void;
+  onCountdown(n: number): void;
+  onLaunch(): void;
+  onError(code: string, message: string): void;
   onStatus(status: ConnectionStatus): void;
   onClosed(reason: ClosedReason): void;
 }
@@ -23,8 +38,12 @@ function reasonForCloseCode(code: number): ClosedReason {
       return "room_full";
     case 4004:
       return "room_not_found";
+    case 4005:
+      return "wrong_password";
     case 4009:
       return "kicked";
+    case 4010:
+      return "banned";
     default:
       return "error";
   }
@@ -45,6 +64,7 @@ export class RoomConnection {
     private code: string,
     private token: string,
     private handlers: RoomHandlers,
+    private password?: string,
   ) {}
 
   connect(): void {
@@ -52,7 +72,8 @@ export class RoomConnection {
     this.handlers.onStatus(this.attempts === 0 ? "connecting" : "reconnecting");
 
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
-    const url = `${proto}//${location.host}/ws?code=${encodeURIComponent(this.code)}&token=${encodeURIComponent(this.token)}`;
+    let url = `${proto}//${location.host}/ws?code=${encodeURIComponent(this.code)}&token=${encodeURIComponent(this.token)}`;
+    if (this.password) url += `&password=${encodeURIComponent(this.password)}`;
     const ws = new WebSocket(url);
     this.ws = ws;
 
@@ -65,8 +86,32 @@ export class RoomConnection {
       const parsed = serverMessageSchema.safeParse(JSON.parse(String(e.data)));
       if (!parsed.success) return;
       const msg = parsed.data;
-      if (msg.type === "room:state") this.handlers.onState(msg.room, msg.you);
-      else if (msg.type === "room:event") this.handlers.onEvent(msg.event);
+      switch (msg.type) {
+        case "room:state":
+          this.handlers.onState(msg.room, msg.you);
+          break;
+        case "room:event":
+          this.handlers.onEvent(msg.event);
+          break;
+        case "chat:message":
+          this.handlers.onChat(msg.message);
+          break;
+        case "chat:history":
+          this.handlers.onChatHistory(msg.messages);
+          break;
+        case "reaction":
+          this.handlers.onReaction(msg.reaction);
+          break;
+        case "countdown":
+          this.handlers.onCountdown(msg.n);
+          break;
+        case "lobby:launch":
+          this.handlers.onLaunch();
+          break;
+        case "error":
+          this.handlers.onError(msg.code, msg.message);
+          break;
+      }
     };
 
     ws.onclose = (e) => {

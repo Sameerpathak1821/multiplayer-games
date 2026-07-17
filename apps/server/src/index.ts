@@ -59,6 +59,7 @@ app.get("/rooms/:code", async (request) => {
     players: snapshot.members.length,
     maxPlayers: snapshot.maxPlayers,
     full: snapshot.members.length >= snapshot.maxPlayers,
+    hasPassword: snapshot.hasPassword,
   };
 });
 
