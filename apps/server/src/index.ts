@@ -1,15 +1,19 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import { MAX_ROOM_PLAYERS, isValidRoomCode } from "@gamehub/shared";
 import { createGuestSession, signSession, verifySessionToken } from "./auth";
+import { RoomManager } from "./rooms/manager";
+import { attachRoomSockets } from "./ws";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? "http://localhost:5173";
 
 const app = Fastify({ logger: true });
+const rooms = new RoomManager();
 
 await app.register(cors, { origin: [WEB_ORIGIN] });
 
-app.get("/health", async () => ({ status: "ok", uptime: process.uptime() }));
+app.get("/health", async () => ({ status: "ok", uptime: process.uptime(), rooms: rooms.roomCount }));
 
 /**
  * Issue a guest identity. If the client presents a valid existing token
@@ -28,6 +32,37 @@ app.post("/auth/guest", async (request) => {
   const token = await signSession(session);
   return { token, session };
 });
+
+app.post("/rooms", async (request, reply) => {
+  const auth = request.headers.authorization;
+  const session = auth?.startsWith("Bearer ")
+    ? await verifySessionToken(auth.slice("Bearer ".length))
+    : null;
+  if (!session) {
+    return reply.status(401).send({ error: "unauthorized" });
+  }
+
+  const body = (request.body ?? {}) as { maxPlayers?: number };
+  const maxPlayers = Math.min(Math.max(Number(body.maxPlayers) || 8, 2), MAX_ROOM_PLAYERS);
+  const room = rooms.createRoom(maxPlayers);
+  return { code: room.code };
+});
+
+app.get("/rooms/:code", async (request) => {
+  const { code } = request.params as { code: string };
+  if (!isValidRoomCode(code.toUpperCase())) return { exists: false };
+  const room = rooms.getRoom(code);
+  if (!room) return { exists: false };
+  const snapshot = room.snapshot();
+  return {
+    exists: true,
+    players: snapshot.members.length,
+    maxPlayers: snapshot.maxPlayers,
+    full: snapshot.members.length >= snapshot.maxPlayers,
+  };
+});
+
+attachRoomSockets(app.server, rooms);
 
 app
   .listen({ port: PORT, host: "0.0.0.0" })

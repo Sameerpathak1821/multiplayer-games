@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export * from "./protocol";
+
 /**
  * Room codes use an alphabet with no ambiguous characters (0/O, 1/I/L).
  */
