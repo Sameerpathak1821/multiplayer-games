@@ -34,6 +34,14 @@ export interface GameDefinition<S, I> {
   /** "turn": event-driven. "tick": fixed-rate server simulation. */
   mode: "turn" | "tick";
 
+  /**
+   * Turn-based games: whose turn is it (null = nobody / simultaneous phase).
+   * The server uses this to run per-turn timers and show turn indicators.
+   */
+  currentTurn?(state: S): string | null;
+  /** If set with currentTurn, the server forfeits players who exceed this budget. */
+  turnTimeoutMs?: number;
+
   init(players: Player[], settings: GameSettings): S;
   /** May this player apply this intent right now? Pure — no side effects. */
   validate(state: S, playerId: string, intent: I): boolean;
@@ -51,4 +59,4 @@ export interface GameDefinition<S, I> {
   isOver(state: S): GameResult | null;
 }
 
-export { createHarness, type Harness } from "./harness";
+export { createHarness, makeTestPlayers, type Harness } from "./harness";

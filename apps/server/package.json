@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@fastify/cors": "^11.0.0",
+    "@gamehub/game-sdk": "workspace:*",
+    "@gamehub/games": "workspace:*",
     "@gamehub/shared": "workspace:*",
     "fastify": "^5.0.0",
     "jose": "^6.0.0",

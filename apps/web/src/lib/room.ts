@@ -3,10 +3,25 @@ import {
   serverMessageSchema,
   type ChatMessage,
   type ClientMessage,
+  type GamePlayer,
+  type GameResultInfo,
   type Reaction,
   type RoomEvent,
   type RoomSnapshot,
+  type TurnInfo,
 } from "@gamehub/shared";
+
+export interface GameStateMsg {
+  gameKey: string;
+  view: unknown;
+  players: GamePlayer[];
+  turn: TurnInfo;
+}
+
+export interface GameOverMsg {
+  result: GameResultInfo;
+  forfeit?: { sessionId: string; name: string };
+}
 
 export type ConnectionStatus = "connecting" | "connected" | "reconnecting";
 
@@ -27,6 +42,8 @@ export interface RoomHandlers {
   onReaction(reaction: Reaction): void;
   onCountdown(n: number): void;
   onLaunch(): void;
+  onGameState(state: GameStateMsg): void;
+  onGameOver(over: GameOverMsg): void;
   onError(code: string, message: string): void;
   onStatus(status: ConnectionStatus): void;
   onClosed(reason: ClosedReason): void;
@@ -107,6 +124,17 @@ export class RoomConnection {
           break;
         case "lobby:launch":
           this.handlers.onLaunch();
+          break;
+        case "game:state":
+          this.handlers.onGameState({
+            gameKey: msg.gameKey,
+            view: msg.view,
+            players: msg.players,
+            turn: msg.turn,
+          });
+          break;
+        case "game:over":
+          this.handlers.onGameOver({ result: msg.result, forfeit: msg.forfeit });
           break;
         case "error":
           this.handlers.onError(msg.code, msg.message);

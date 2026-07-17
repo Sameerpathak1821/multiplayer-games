@@ -23,6 +23,12 @@ importers:
       '@fastify/cors':
         specifier: ^11.0.0
         version: 11.3.0
+      '@gamehub/game-sdk':
+        specifier: workspace:*
+        version: link:../../packages/game-sdk
+      '@gamehub/games':
+        specifier: workspace:*
+        version: link:../../packages/games
       '@gamehub/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -54,6 +60,12 @@ importers:
 
   apps/web:
     dependencies:
+      '@gamehub/game-sdk':
+        specifier: workspace:*
+        version: link:../../packages/game-sdk
+      '@gamehub/games':
+        specifier: workspace:*
+        version: link:../../packages/games
       '@gamehub/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -102,6 +114,19 @@ importers:
         version: 7.3.6(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)
 
   packages/game-sdk:
+    devDependencies:
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)
+
+  packages/games:
+    dependencies:
+      '@gamehub/game-sdk':
+        specifier: workspace:*
+        version: link:../game-sdk
     devDependencies:
       typescript:
         specifier: ^5.8.0

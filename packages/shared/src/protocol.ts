@@ -20,14 +20,38 @@ export const memberInfoSchema = z.object({
 });
 export type MemberInfo = z.infer<typeof memberInfoSchema>;
 
+export const roomPhaseSchema = z.enum(["lobby", "playing", "postgame"]);
+export type RoomPhase = z.infer<typeof roomPhaseSchema>;
+
 export const roomSnapshotSchema = z.object({
   code: z.string(),
   ownerSessionId: z.string().nullable(),
   maxPlayers: z.number(),
   hasPassword: z.boolean(),
+  gameKey: z.string().nullable(),
+  phase: roomPhaseSchema,
   members: z.array(memberInfoSchema),
 });
 export type RoomSnapshot = z.infer<typeof roomSnapshotSchema>;
+
+export const gamePlayerSchema = z.object({
+  sessionId: z.string(),
+  name: z.string(),
+  avatarColor: z.string(),
+});
+export type GamePlayer = z.infer<typeof gamePlayerSchema>;
+
+export const turnInfoSchema = z
+  .object({ sessionId: z.string(), deadline: z.number() })
+  .nullable();
+export type TurnInfo = z.infer<typeof turnInfoSchema>;
+
+export const gameResultSchema = z.object({
+  placements: z.array(z.array(z.string())),
+  scores: z.record(z.string(), z.number()).optional(),
+  draw: z.boolean().optional(),
+});
+export type GameResultInfo = z.infer<typeof gameResultSchema>;
 
 export const roomEventKindSchema = z.enum([
   "joined",
@@ -78,6 +102,8 @@ export const clientMessageSchema = z.discriminatedUnion("type", [
     type: z.literal("settings:set_password"),
     password: z.string().min(1).max(50).nullable(),
   }),
+  z.object({ type: z.literal("game:select"), gameKey: z.string().nullable() }),
+  z.object({ type: z.literal("game:intent"), payload: z.unknown() }),
 ]);
 export type ClientMessage = z.infer<typeof clientMessageSchema>;
 
@@ -90,6 +116,18 @@ export const serverMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("reaction"), reaction: reactionSchema }),
   z.object({ type: z.literal("countdown"), n: z.number() }),
   z.object({ type: z.literal("lobby:launch") }),
+  z.object({
+    type: z.literal("game:state"),
+    gameKey: z.string(),
+    view: z.unknown(),
+    players: z.array(gamePlayerSchema),
+    turn: turnInfoSchema,
+  }),
+  z.object({
+    type: z.literal("game:over"),
+    result: gameResultSchema,
+    forfeit: z.object({ sessionId: z.string(), name: z.string() }).optional(),
+  }),
   z.object({ type: z.literal("pong") }),
   z.object({ type: z.literal("error"), code: z.string(), message: z.string() }),
 ]);

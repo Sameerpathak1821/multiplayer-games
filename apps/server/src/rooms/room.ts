@@ -6,9 +6,13 @@ import {
   type ChatMessage,
   type ClientMessage,
   type RoomEventKind,
+  type RoomPhase,
   type RoomSnapshot,
   type ServerMessage,
 } from "@gamehub/shared";
+import type { GameResult } from "@gamehub/game-sdk";
+import { GAME_REGISTRY } from "@gamehub/games";
+import { GameSession } from "../games/session";
 
 /**
  * Minimal socket surface the room needs — lets tests drive rooms with fakes.
@@ -36,6 +40,8 @@ export interface RoomOptions {
   graceMs: number;
   /** Delay between countdown ticks (shortened in tests). */
   countdownTickMs?: number;
+  /** Override games' per-turn budget (shortened in tests). */
+  turnTimeoutMs?: number;
   /** Called when the last member is gone, so the manager can drop the room. */
   onEmpty: (code: string) => void;
 }
@@ -55,6 +61,9 @@ export class Room {
   lastActivityAt = Date.now();
   ownerSessionId: string | null = null;
   password: string | null = null;
+  gameKey: string | null = null;
+  phase: RoomPhase = "lobby";
+  private session: GameSession | null = null;
   private members = new Map<string, Member>();
   private banned = new Set<string>();
   private chatHistory: ChatMessage[] = [];
@@ -97,6 +106,7 @@ export class Room {
       if (wasDisconnected) this.emitEvent("reconnected", session.sessionId);
       this.sendTo(existing, { type: "chat:history", messages: this.chatHistory });
       this.broadcastState();
+      this.sendGameStateTo(existing);
       return null;
     }
 
@@ -117,6 +127,7 @@ export class Room {
     this.emitEvent("joined", session.sessionId);
     this.sendTo(member, { type: "chat:history", messages: this.chatHistory });
     this.broadcastState();
+    this.sendGameStateTo(member);
     return null;
   }
 
@@ -183,8 +194,13 @@ export class Room {
         break;
       case "countdown:start": {
         if (sessionId !== this.ownerSessionId || this.countdownTimer) return;
+        if (this.phase === "playing") return;
         const connected = [...this.members.values()].filter((m) => m.connected);
         if (!connected.every((m) => m.ready)) return;
+        if (this.gameKey) {
+          const def = GAME_REGISTRY[this.gameKey];
+          if (!def || connected.length < def.minPlayers) return;
+        }
         this.runCountdown(3);
         break;
       }
@@ -192,6 +208,17 @@ export class Room {
         if (sessionId !== this.ownerSessionId) return;
         this.password = msg.password;
         this.broadcastState();
+        break;
+      case "game:select":
+        if (sessionId !== this.ownerSessionId || this.phase === "playing") return;
+        if (msg.gameKey !== null && !GAME_REGISTRY[msg.gameKey]) return;
+        this.gameKey = msg.gameKey;
+        this.phase = "lobby";
+        this.broadcastState();
+        break;
+      case "game:intent":
+        if (this.phase !== "playing" || !this.session) return;
+        this.session.applyIntent(sessionId, msg.payload);
         break;
     }
   }
@@ -215,13 +242,85 @@ export class Room {
   private runCountdown(n: number): void {
     if (n === 0) {
       this.countdownTimer = null;
-      this.broadcast({ type: "lobby:launch" });
-      for (const m of this.members.values()) m.ready = false;
-      this.broadcastState();
+      if (this.gameKey && GAME_REGISTRY[this.gameKey]) {
+        this.startGame();
+      } else {
+        this.broadcast({ type: "lobby:launch" });
+        for (const m of this.members.values()) m.ready = false;
+        this.broadcastState();
+      }
       return;
     }
     this.broadcast({ type: "countdown", n });
     this.countdownTimer = setTimeout(() => this.runCountdown(n - 1), this.opts.countdownTickMs ?? 1000);
+  }
+
+  /**
+   * Seat the longest-present connected members (up to the game's max);
+   * everyone else in the room spectates.
+   */
+  private startGame(): void {
+    const def = GAME_REGISTRY[this.gameKey!]!;
+    const players = [...this.members.values()]
+      .filter((m) => m.connected)
+      .sort((a, b) => a.joinedAt - b.joinedAt)
+      .slice(0, def.maxPlayers)
+      .map((m) => ({
+        id: m.session.sessionId,
+        name: m.session.name,
+        avatarColor: m.session.avatarColor,
+      }));
+    if (players.length < def.minPlayers) return;
+
+    this.session = new GameSession(def, players, {
+      turnTimeoutMs: this.opts.turnTimeoutMs,
+      onState: () => this.broadcastGameState(),
+      onOver: (result, forfeitSessionId) => this.endGame(result, forfeitSessionId),
+    });
+    this.phase = "playing";
+    for (const m of this.members.values()) m.ready = false;
+    this.broadcastState();
+    this.broadcastGameState();
+  }
+
+  private broadcastGameState(): void {
+    for (const m of this.members.values()) this.sendGameStateTo(m);
+  }
+
+  private sendGameStateTo(member: Member): void {
+    const session = this.session;
+    if (!session || !this.gameKey) return;
+    const viewerId = session.isPlayer(member.session.sessionId) ? member.session.sessionId : null;
+    this.sendTo(member, {
+      type: "game:state",
+      gameKey: this.gameKey,
+      view: session.viewFor(viewerId),
+      players: session.players.map((p) => ({
+        sessionId: p.id,
+        name: p.name,
+        avatarColor: p.avatarColor,
+      })),
+      turn: session.turn,
+    });
+  }
+
+  private endGame(result: GameResult, forfeitSessionId?: string): void {
+    const session = this.session;
+    if (!session) return;
+    const forfeit = forfeitSessionId
+      ? {
+          sessionId: forfeitSessionId,
+          name:
+            session.players.find((p) => p.id === forfeitSessionId)?.name ??
+            this.members.get(forfeitSessionId)?.session.name ??
+            "?",
+        }
+      : undefined;
+    this.broadcast({ type: "game:over", result, forfeit });
+    session.destroy();
+    this.session = null;
+    this.phase = "postgame";
+    this.broadcastState();
   }
 
   private allowRate(times: number[], limit: { max: number; windowMs: number }): boolean {
@@ -239,6 +338,11 @@ export class Room {
     if (member.graceTimer) clearTimeout(member.graceTimer);
     this.members.delete(sessionId);
     this.emitEvent(reason, sessionId, member.session.name);
+
+    // A seated player abandoning mid-game forfeits to the others.
+    if (this.session && this.phase === "playing" && this.session.isPlayer(sessionId)) {
+      this.session.forfeit(sessionId);
+    }
 
     if (member.socket) {
       if (reason === "kicked") member.socket.close(CLOSE_CODES.KICKED, "kicked by host");
@@ -265,6 +369,8 @@ export class Room {
       ownerSessionId: this.ownerSessionId,
       maxPlayers: this.opts.maxPlayers,
       hasPassword: this.password !== null,
+      gameKey: this.gameKey,
+      phase: this.phase,
       members: [...this.members.values()]
         .sort((a, b) => a.joinedAt - b.joinedAt)
         .map((m) => ({
@@ -279,6 +385,8 @@ export class Room {
 
   /** Tear down all timers/sockets (server shutdown or TTL sweep). */
   destroy(): void {
+    this.session?.destroy();
+    this.session = null;
     if (this.countdownTimer) clearTimeout(this.countdownTimer);
     for (const m of this.members.values()) {
       if (m.graceTimer) clearTimeout(m.graceTimer);

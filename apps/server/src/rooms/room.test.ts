@@ -36,6 +36,7 @@ describe("Room", () => {
     room = new Room("TEST42", {
       maxPlayers: 3,
       graceMs: 1000,
+      turnTimeoutMs: 2000,
       onEmpty: (c) => emptied.push(c),
     });
   });
@@ -222,6 +223,119 @@ describe("Room", () => {
     expect(ticks).toEqual([3, 2, 1]);
     expect(s2.sent.some((m) => m.type === "lobby:launch")).toBe(true);
     expect(room.snapshot().members.every((m) => !m.ready)).toBe(true);
+  });
+
+  it("match loop: select game, ready, countdown, play to a win, rematch", () => {
+    const s1 = new FakeSocket();
+    const s2 = new FakeSocket();
+    room.join(session("a"), s1);
+    room.join(session("b"), s2);
+
+    // Only the owner can pick the game.
+    room.handleMessage("b", { type: "game:select", gameKey: "tic-tac-toe" });
+    expect(room.snapshot().gameKey).toBeNull();
+    room.handleMessage("a", { type: "game:select", gameKey: "tic-tac-toe" });
+    expect(room.snapshot().gameKey).toBe("tic-tac-toe");
+
+    room.handleMessage("a", { type: "ready:set", ready: true });
+    room.handleMessage("b", { type: "ready:set", ready: true });
+    room.handleMessage("a", { type: "countdown:start" });
+    vi.advanceTimersByTime(3000);
+
+    expect(room.snapshot().phase).toBe("playing");
+    const start = s2.sent.filter((m) => m.type === "game:state").at(-1);
+    expect(start?.type === "game:state" && start.players).toHaveLength(2);
+    expect(start?.type === "game:state" && start.turn?.sessionId).toBe("a");
+
+    // a is X (joined first). X wins the top row.
+    room.handleMessage("a", { type: "game:intent", payload: { cell: 0 } });
+    room.handleMessage("b", { type: "game:intent", payload: { cell: 3 } });
+    room.handleMessage("a", { type: "game:intent", payload: { cell: 1 } });
+    room.handleMessage("b", { type: "game:intent", payload: { cell: 4 } });
+    room.handleMessage("a", { type: "game:intent", payload: { cell: 2 } });
+
+    const over = s2.sent.find((m) => m.type === "game:over");
+    expect(over?.type === "game:over" && over.result.placements).toEqual([["a"], ["b"]]);
+    expect(room.snapshot().phase).toBe("postgame");
+
+    // Rematch: ready again, countdown again, fresh board.
+    room.handleMessage("a", { type: "ready:set", ready: true });
+    room.handleMessage("b", { type: "ready:set", ready: true });
+    room.handleMessage("a", { type: "countdown:start" });
+    vi.advanceTimersByTime(3000);
+    expect(room.snapshot().phase).toBe("playing");
+    const fresh = s2.sent.filter((m) => m.type === "game:state").at(-1);
+    expect(
+      fresh?.type === "game:state" &&
+        (fresh.view as { board: unknown[] }).board.every((c) => c === null),
+    ).toBe(true);
+  });
+
+  it("invalid and out-of-turn intents do not change game state", () => {
+    const s1 = new FakeSocket();
+    room.join(session("a"), s1);
+    room.join(session("b"), new FakeSocket());
+    room.handleMessage("a", { type: "game:select", gameKey: "tic-tac-toe" });
+    room.handleMessage("a", { type: "ready:set", ready: true });
+    room.handleMessage("b", { type: "ready:set", ready: true });
+    room.handleMessage("a", { type: "countdown:start" });
+    vi.advanceTimersByTime(3000);
+
+    const before = s1.sent.filter((m) => m.type === "game:state").length;
+    room.handleMessage("b", { type: "game:intent", payload: { cell: 0 } }); // not b's turn
+    room.handleMessage("a", { type: "game:intent", payload: { cell: 99 } }); // bad cell
+    expect(s1.sent.filter((m) => m.type === "game:state").length).toBe(before);
+  });
+
+  it("third member spectates and still receives game state", () => {
+    room.join(session("a"), new FakeSocket());
+    room.join(session("b"), new FakeSocket());
+    const s3 = new FakeSocket();
+    room.join(session("c"), s3);
+    room.handleMessage("a", { type: "game:select", gameKey: "tic-tac-toe" });
+    for (const id of ["a", "b", "c"]) room.handleMessage(id, { type: "ready:set", ready: true });
+    room.handleMessage("a", { type: "countdown:start" });
+    vi.advanceTimersByTime(3000);
+
+    const gs = s3.sent.filter((m) => m.type === "game:state").at(-1);
+    expect(gs?.type === "game:state" && gs.players.map((p) => p.sessionId)).toEqual(["a", "b"]);
+    // Spectators can't move.
+    room.handleMessage("c", { type: "game:intent", payload: { cell: 0 } });
+    const after = s3.sent.filter((m) => m.type === "game:state").at(-1);
+    expect(after?.type === "game:state" && (after.view as { board: unknown[] }).board[0]).toBeNull();
+  });
+
+  it("turn timeout forfeits the slow player", () => {
+    const s2 = new FakeSocket();
+    room.join(session("a"), new FakeSocket());
+    room.join(session("b"), s2);
+    room.handleMessage("a", { type: "game:select", gameKey: "tic-tac-toe" });
+    room.handleMessage("a", { type: "ready:set", ready: true });
+    room.handleMessage("b", { type: "ready:set", ready: true });
+    room.handleMessage("a", { type: "countdown:start" });
+    vi.advanceTimersByTime(3000);
+
+    // a (X) never moves; the 2s test turn budget expires.
+    vi.advanceTimersByTime(2001);
+    const over = s2.sent.find((m) => m.type === "game:over");
+    expect(over?.type === "game:over" && over.result.placements).toEqual([["b"], ["a"]]);
+    expect(over?.type === "game:over" && over.forfeit?.sessionId).toBe("a");
+  });
+
+  it("a seated player leaving mid-game forfeits to the opponent", () => {
+    const s2 = new FakeSocket();
+    room.join(session("a"), new FakeSocket());
+    room.join(session("b"), s2);
+    room.handleMessage("a", { type: "game:select", gameKey: "tic-tac-toe" });
+    room.handleMessage("a", { type: "ready:set", ready: true });
+    room.handleMessage("b", { type: "ready:set", ready: true });
+    room.handleMessage("a", { type: "countdown:start" });
+    vi.advanceTimersByTime(3000);
+
+    room.handleMessage("a", { type: "leave" });
+    const over = s2.sent.find((m) => m.type === "game:over");
+    expect(over?.type === "game:over" && over.result.placements).toEqual([["b"], ["a"]]);
+    expect(room.snapshot().phase).toBe("postgame");
   });
 
   it("countdown refuses to start unless everyone connected is ready, and only for the owner", () => {

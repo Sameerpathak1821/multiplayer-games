@@ -3,7 +3,13 @@ import { useNavigate, useParams } from "react-router-dom";
 import type { ChatMessage, RoomEvent, RoomSnapshot } from "@gamehub/shared";
 import { AVATAR_COLORS, isValidRoomCode } from "@gamehub/shared";
 import { ensureGuestSession, getToken } from "../lib/session";
-import { RoomConnection, type ClosedReason, type ConnectionStatus } from "../lib/room";
+import {
+  RoomConnection,
+  type ClosedReason,
+  type ConnectionStatus,
+  type GameOverMsg,
+  type GameStateMsg,
+} from "../lib/room";
 import ChatPanel from "../components/ChatPanel";
 import PlayerList from "../components/PlayerList";
 import Stage, { type FloatingReaction } from "../components/Stage";
@@ -48,6 +54,8 @@ export default function Lobby() {
   const [reactions, setReactions] = useState<FloatingReaction[]>([]);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [launched, setLaunched] = useState(false);
+  const [gameState, setGameState] = useState<GameStateMsg | null>(null);
+  const [gameOver, setGameOver] = useState<GameOverMsg | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [needsPassword, setNeedsPassword] = useState(false);
@@ -94,6 +102,11 @@ export default function Lobby() {
             setLaunched(true);
             setTimeout(() => setLaunched(false), 4000);
           },
+          onGameState: (gs) => {
+            setCountdown(null);
+            setGameState(gs);
+          },
+          onGameOver: (o) => setGameOver(o),
           onError: (_code, message) => setToast(message),
           onStatus: setStatus,
           onClosed: (reason) => {
@@ -117,6 +130,16 @@ export default function Lobby() {
   useEffect(() => {
     roomRef.current = room;
   }, [room]);
+
+  // Reset game panels when the room returns to the lobby / a new game starts.
+  useEffect(() => {
+    if (room?.phase === "lobby") {
+      setGameState(null);
+      setGameOver(null);
+    } else if (room?.phase === "playing") {
+      setGameOver(null);
+    }
+  }, [room?.phase]);
 
   useEffect(() => {
     if (!isValidRoomCode(roomCode)) {
@@ -260,8 +283,12 @@ export default function Lobby() {
               countdown={countdown}
               launched={launched}
               reactions={reactions}
+              gameState={gameState}
+              gameOver={gameOver}
               onReady={(ready) => connRef.current?.send({ type: "ready:set", ready })}
               onStart={() => connRef.current?.send({ type: "countdown:start" })}
+              onSelectGame={(gameKey) => connRef.current?.send({ type: "game:select", gameKey })}
+              onMove={(payload) => connRef.current?.send({ type: "game:intent", payload })}
             />
           )}
         </div>
