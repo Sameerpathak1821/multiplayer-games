@@ -41,6 +41,13 @@ export interface GameDefinition<S, I> {
   currentTurn?(state: S): string | null;
   /** If set with currentTurn, the server forfeits players who exceed this budget. */
   turnTimeoutMs?: number;
+  /**
+   * Timed-round games: the whole game ends this long after start.
+   * The server then applies `timeUp` and expects `isOver` to return a result.
+   */
+  durationMs?: number;
+  /** Transition state to "time expired" (e.g. mark the round ended). */
+  timeUp?(state: S): S;
 
   init(players: Player[], settings: GameSettings): S;
   /** May this player apply this intent right now? Pure — no side effects. */

@@ -1,9 +1,10 @@
 import { Suspense, lazy } from "react";
 import type { RoomSnapshot } from "@gamehub/shared";
-import { GAME_LIST, winnerInfo, type TicTacToeState } from "@gamehub/games";
+import { GAME_LIST, winnerInfo, type TicTacToeState } from "@gamehub/games/client";
 import type { GfxPref } from "../lib/quality";
 import type { GameOverMsg, GameStateMsg } from "../lib/room";
 import TicTacToeBoard from "./games/TicTacToeBoard";
+import CrosswordBoard from "./games/CrosswordBoard";
 import { SeatsRow, TurnStatus } from "./games/TicTacToeChrome";
 
 // Three.js loads only when a 3D stage actually renders.
@@ -17,10 +18,7 @@ export interface FloatingReaction {
   color: string;
 }
 
-const COMING_SOON = [
-  { key: "crossword", displayName: "Crossword Race", note: "Sprint 6" },
-  { key: "shooter", displayName: "Arena Shooter", note: "Sprint 8" },
-];
+const COMING_SOON = [{ key: "shooter", displayName: "Arena Shooter", note: "Sprint 8" }];
 
 interface Props {
   room: RoomSnapshot;
@@ -140,7 +138,7 @@ export default function Stage({
                 : "bg-surface-raised/70 " + (isOwner ? "hover:bg-line/60" : "")
             }`}
           >
-            <div className="text-2xl">⭕</div>
+            <div className="text-2xl">{g.icon}</div>
             <div className="mt-1.5 font-semibold">{g.displayName}</div>
             <div className="mt-0.5 text-xs text-ink-muted">{g.description}</div>
             <div className="mt-1 text-[10px] text-ink-muted">
@@ -224,6 +222,8 @@ export default function Stage({
             <div className="pointer-events-auto h-full">
               {gameState.gameKey === "tic-tac-toe" ? (
                 <TicTacToeBoard game={gameState} you={you} finished={false} onMove={(cell) => onMove({ cell })} />
+              ) : gameState.gameKey === "crossword" ? (
+                <CrosswordBoard game={gameState} you={you} finished={false} onMove={onMove} />
               ) : (
                 <p className="text-ink-muted">Unknown game: {gameState.gameKey}</p>
               )}
@@ -240,6 +240,25 @@ export default function Stage({
               <div className="font-(family-name:--font-display) text-2xl font-bold">
                 {resultLine()}
               </div>
+              {(() => {
+                const scores = gameOver?.result.scores;
+                if (!scores || !gameState) return null;
+                return (
+                  <div className="mt-3 space-y-1 text-sm">
+                    {gameOver.result.placements.flat().map((id, i) => (
+                      <div key={id} className="flex items-center justify-between gap-8">
+                        <span className={id === you ? "font-semibold text-accent" : ""}>
+                          {i + 1}.{" "}
+                          {id === you
+                            ? "you"
+                            : (gameState.players.find((p) => p.sessionId === id)?.name ?? "?")}
+                        </span>
+                        <span className="font-mono text-ink-muted">{scores[id] ?? 0} pts</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
             {readyControls}
             {isOwner && (

@@ -37,6 +37,7 @@ describe("Room", () => {
       maxPlayers: 3,
       graceMs: 1000,
       turnTimeoutMs: 2000,
+      gameDurationMs: 5000,
       onEmpty: (c) => emptied.push(c),
     });
   });
@@ -336,6 +337,44 @@ describe("Room", () => {
     const over = s2.sent.find((m) => m.type === "game:over");
     expect(over?.type === "game:over" && over.result.placements).toEqual([["b"], ["a"]]);
     expect(room.snapshot().phase).toBe("postgame");
+  });
+
+  it("timed game (crossword) ends via time-up with a scored result", () => {
+    const s1 = new FakeSocket();
+    const s2 = new FakeSocket();
+    room.join(session("a"), s1);
+    room.join(session("b"), s2);
+    room.handleMessage("a", { type: "game:select", gameKey: "crossword" });
+    room.handleMessage("a", { type: "ready:set", ready: true });
+    room.handleMessage("b", { type: "ready:set", ready: true });
+    room.handleMessage("a", { type: "countdown:start" });
+    vi.advanceTimersByTime(3000);
+    expect(room.snapshot().phase).toBe("playing");
+
+    // Nobody finishes; the 5s test duration expires.
+    vi.advanceTimersByTime(5001);
+    const over = s2.sent.find((m) => m.type === "game:over");
+    expect(over?.type === "game:over" && over.result.scores).toBeDefined();
+    expect(room.snapshot().phase).toBe("postgame");
+  });
+
+  it("crossword view sent to players contains no answers", () => {
+    const s1 = new FakeSocket();
+    room.join(session("a"), s1);
+    room.join(session("b"), new FakeSocket());
+    room.handleMessage("a", { type: "game:select", gameKey: "crossword" });
+    room.handleMessage("a", { type: "ready:set", ready: true });
+    room.handleMessage("b", { type: "ready:set", ready: true });
+    room.handleMessage("a", { type: "countdown:start" });
+    vi.advanceTimersByTime(3000);
+
+    const gs = s1.sent.filter((m) => m.type === "game:state").at(-1);
+    expect(gs?.type).toBe("game:state");
+    if (gs?.type === "game:state") {
+      const view = gs.view as { entries: Array<Record<string, unknown>> };
+      expect(view.entries.length).toBeGreaterThan(0);
+      for (const e of view.entries) expect(e.answer).toBeUndefined();
+    }
   });
 
   it("countdown refuses to start unless everyone connected is ready, and only for the owner", () => {

@@ -3,7 +3,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { ContactShadows, Float, RoundedBox, useCursor } from "@react-three/drei";
 import { MathUtils, Vector3, type Group, type Mesh, type MeshStandardMaterial } from "three";
 import type { RoomPhase } from "@gamehub/shared";
-import type { Cell, Seat } from "@gamehub/games";
+import type { Cell, Seat } from "@gamehub/games/client";
 import { maxDpr } from "../lib/quality";
 
 /**

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { TicTacToeState } from "@gamehub/games";
+import type { TicTacToeState } from "@gamehub/games/client";
 import type { GameStateMsg } from "../../lib/room";
 
 export const SEAT_COLORS = { X: "var(--color-accent)", O: "var(--color-accent-2)" } as const;

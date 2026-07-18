@@ -1,4 +1,4 @@
-import { winnerInfo, type TicTacToeState } from "@gamehub/games";
+import { winnerInfo, type TicTacToeState } from "@gamehub/games/client";
 import type { GameStateMsg } from "../../lib/room";
 import { SEAT_COLORS, SeatsRow, TurnStatus } from "./TicTacToeChrome";
 

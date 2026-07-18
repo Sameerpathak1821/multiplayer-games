@@ -2,9 +2,15 @@
 import type { GameDefinition, GameResult, Player } from "@gamehub/game-sdk";
 import type { TurnInfo } from "@gamehub/shared";
 
+import type { GameSettings } from "@gamehub/game-sdk";
+
 export interface GameSessionOptions {
   /** Override the game's own per-turn budget (tests use short values). */
   turnTimeoutMs?: number;
+  /** Override the game's total duration (tests use short values). */
+  durationMs?: number;
+  /** Passed through to the game's init. */
+  settings?: GameSettings;
   /** Called whenever state changed and views should be re-broadcast. */
   onState: () => void;
   /** Called exactly once when the game ends. */
@@ -21,14 +27,28 @@ export class GameSession {
   private state: any;
   private over = false;
   private turnTimer: ReturnType<typeof setTimeout> | null = null;
+  private gameTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private def: GameDefinition<any, any>,
     readonly players: Player[],
     private opts: GameSessionOptions,
   ) {
-    this.state = def.init(players, {});
+    this.state = def.init(players, opts.settings ?? {});
     this.armTurnTimer();
+
+    // Timed-round games end no matter what once the clock runs out.
+    const durationMs = def.durationMs ? (opts.durationMs ?? def.durationMs) : undefined;
+    if (durationMs) {
+      this.gameTimer = setTimeout(() => this.handleTimeUp(), durationMs);
+    }
+  }
+
+  private handleTimeUp(): void {
+    if (this.over) return;
+    if (this.def.timeUp) this.state = this.def.timeUp(this.state);
+    const result = this.def.isOver(this.state);
+    if (result) this.finish(result);
   }
 
   isPlayer(sessionId: string): boolean {
@@ -64,11 +84,15 @@ export class GameSession {
   destroy(): void {
     this.over = true;
     this.clearTurnTimer();
+    if (this.gameTimer) clearTimeout(this.gameTimer);
+    this.gameTimer = null;
   }
 
   private finish(result: GameResult, forfeitSessionId?: string): void {
     this.over = true;
     this.clearTurnTimer();
+    if (this.gameTimer) clearTimeout(this.gameTimer);
+    this.gameTimer = null;
     this.turn = null;
     this.opts.onState(); // final board reaches everyone before the result
     this.opts.onOver(result, forfeitSessionId);

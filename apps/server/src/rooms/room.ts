@@ -42,6 +42,8 @@ export interface RoomOptions {
   countdownTickMs?: number;
   /** Override games' per-turn budget (shortened in tests). */
   turnTimeoutMs?: number;
+  /** Override timed games' duration (shortened in tests). */
+  gameDurationMs?: number;
   /** Called when the last member is gone, so the manager can drop the room. */
   onEmpty: (code: string) => void;
 }
@@ -274,6 +276,8 @@ export class Room {
 
     this.session = new GameSession(def, players, {
       turnTimeoutMs: this.opts.turnTimeoutMs,
+      durationMs: this.opts.gameDurationMs,
+      settings: this.opts.gameDurationMs ? { durationMs: this.opts.gameDurationMs } : {},
       onState: () => this.broadcastGameState(),
       onOver: (result, forfeitSessionId) => this.endGame(result, forfeitSessionId),
     });
