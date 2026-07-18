@@ -6,6 +6,7 @@ import type { GameOverMsg, GameStateMsg } from "../lib/room";
 import TicTacToeBoard from "./games/TicTacToeBoard";
 import CrosswordBoard from "./games/CrosswordBoard";
 import ArenaBoard from "./games/ArenaBoard";
+import ShooterBoard from "./games/ShooterBoard";
 import { SeatsRow, TurnStatus } from "./games/TicTacToeChrome";
 
 // Three.js loads only when a 3D stage actually renders.
@@ -19,7 +20,7 @@ export interface FloatingReaction {
   color: string;
 }
 
-const COMING_SOON = [{ key: "shooter", displayName: "Arena Shooter", note: "Sprint 8" }];
+const COMING_SOON: Array<{ key: string; displayName: string; note: string }> = [];
 
 interface Props {
   room: RoomSnapshot;
@@ -229,6 +230,8 @@ export default function Stage({
                 <CrosswordBoard game={gameState} you={you} finished={false} onMove={onMove} />
               ) : gameState.gameKey === "arena" ? (
                 <ArenaBoard game={gameState} you={you} finished={false} ping={ping} onMove={onMove} />
+              ) : gameState.gameKey === "shooter" ? (
+                <ShooterBoard game={gameState} you={you} finished={false} ping={ping} onMove={onMove} />
               ) : (
                 <p className="text-ink-muted">Unknown game: {gameState.gameKey}</p>
               )}

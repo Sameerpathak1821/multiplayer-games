@@ -16,6 +16,7 @@ export {
 
 export * from "./crossword/types";
 export * from "./arena/types";
+export * from "./shooter/types";
 
 export interface GameListing {
   key: string;
@@ -49,6 +50,14 @@ export const GAME_LIST: GameListing[] = [
     displayName: "Orb Arena",
     description: "WASD to move — first to 10 orbs wins. Real-time!",
     icon: "🔮",
+    minPlayers: 1,
+    maxPlayers: 8,
+  },
+  {
+    key: "shooter",
+    displayName: "Blast Arena",
+    description: "Top-down deathmatch — first to 10 kills. Aim with mouse or touch.",
+    icon: "💥",
     minPlayers: 1,
     maxPlayers: 8,
   },
