@@ -93,7 +93,7 @@ export const clientMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("leave") }),
   z.object({ type: z.literal("kick"), sessionId: z.string() }),
   z.object({ type: z.literal("transfer_owner"), sessionId: z.string() }),
-  z.object({ type: z.literal("ping") }),
+  z.object({ type: z.literal("ping"), t: z.number().optional() }),
   z.object({ type: z.literal("chat:send"), text: z.string().min(1).max(MAX_CHAT_LENGTH) }),
   z.object({ type: z.literal("reaction:send"), emoji: z.enum(REACTION_EMOJI) }),
   z.object({ type: z.literal("ready:set"), ready: z.boolean() }),
@@ -128,7 +128,7 @@ export const serverMessageSchema = z.discriminatedUnion("type", [
     result: gameResultSchema,
     forfeit: z.object({ sessionId: z.string(), name: z.string() }).optional(),
   }),
-  z.object({ type: z.literal("pong") }),
+  z.object({ type: z.literal("pong"), t: z.number().optional() }),
   z.object({ type: z.literal("error"), code: z.string(), message: z.string() }),
 ]);
 export type ServerMessage = z.infer<typeof serverMessageSchema>;

@@ -2,6 +2,9 @@
 import type { GameDefinition, GameResult, Player } from "@gamehub/game-sdk";
 import type { TurnInfo } from "@gamehub/shared";
 
+/** Fixed simulation step for tick-mode games (20 Hz). */
+export const TICK_MS = 50;
+
 import type { GameSettings } from "@gamehub/game-sdk";
 
 export interface GameSessionOptions {
@@ -28,6 +31,7 @@ export class GameSession {
   private over = false;
   private turnTimer: ReturnType<typeof setTimeout> | null = null;
   private gameTimer: ReturnType<typeof setTimeout> | null = null;
+  private tickTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private def: GameDefinition<any, any>,
@@ -37,10 +41,28 @@ export class GameSession {
     this.state = def.init(players, opts.settings ?? {});
     this.armTurnTimer();
 
+    // Tick-mode games: fixed-rate simulation loop. Inputs are applied the
+    // moment they arrive (they only set held state); the loop advances the
+    // world and broadcasts one snapshot per tick.
+    if (def.mode === "tick" && def.tick) {
+      this.tickTimer = setInterval(() => this.runTick(), TICK_MS);
+    }
+
     // Timed-round games end no matter what once the clock runs out.
     const durationMs = def.durationMs ? (opts.durationMs ?? def.durationMs) : undefined;
     if (durationMs) {
       this.gameTimer = setTimeout(() => this.handleTimeUp(), durationMs);
+    }
+  }
+
+  private runTick(): void {
+    if (this.over) return;
+    this.state = this.def.tick!(this.state, TICK_MS);
+    const result = this.def.isOver(this.state);
+    if (result) {
+      this.finish(result);
+    } else {
+      this.opts.onState();
     }
   }
 
@@ -60,6 +82,10 @@ export class GameSession {
     if (!this.def.validate(this.state, sessionId, intent)) return false;
 
     this.state = this.def.apply(this.state, sessionId, intent);
+
+    // Tick mode: intents only mutate held inputs — the loop broadcasts.
+    if (this.tickTimer) return true;
+
     const result = this.def.isOver(this.state);
     if (result) {
       this.finish(result);
@@ -86,6 +112,8 @@ export class GameSession {
     this.clearTurnTimer();
     if (this.gameTimer) clearTimeout(this.gameTimer);
     this.gameTimer = null;
+    if (this.tickTimer) clearInterval(this.tickTimer);
+    this.tickTimer = null;
   }
 
   private finish(result: GameResult, forfeitSessionId?: string): void {
@@ -93,6 +121,8 @@ export class GameSession {
     this.clearTurnTimer();
     if (this.gameTimer) clearTimeout(this.gameTimer);
     this.gameTimer = null;
+    if (this.tickTimer) clearInterval(this.tickTimer);
+    this.tickTimer = null;
     this.turn = null;
     this.opts.onState(); // final board reaches everyone before the result
     this.opts.onOver(result, forfeitSessionId);

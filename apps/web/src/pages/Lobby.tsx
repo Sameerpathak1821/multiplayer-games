@@ -62,6 +62,7 @@ export default function Lobby() {
   const [needsPassword, setNeedsPassword] = useState(false);
   const [pwInput, setPwInput] = useState("");
   const [gfx, setGfx] = useState<GfxPref>(getGfxPref);
+  const [ping, setPing] = useState<number | null>(null);
   const connRef = useRef<RoomConnection | null>(null);
 
   const openConnection = useCallback(
@@ -110,6 +111,7 @@ export default function Lobby() {
           },
           onGameOver: (o) => setGameOver(o),
           onError: (_code, message) => setToast(message),
+          onPing: setPing,
           onStatus: setStatus,
           onClosed: (reason) => {
             if (reason === "wrong_password") {
@@ -258,6 +260,14 @@ export default function Lobby() {
                 ? "Invite link copied!"
                 : "Click code to copy link"}
           </span>
+          {ping !== null && status === "connected" && (
+            <span
+              className={`font-mono text-[10px] ${ping < 80 ? "text-success" : ping < 200 ? "text-ink-muted" : "text-danger"}`}
+              title="Connection latency"
+            >
+              {ping}ms
+            </span>
+          )}
           {systemAllows3D() && (
             <button
               onClick={() => {
@@ -303,6 +313,7 @@ export default function Lobby() {
               gameState={gameState}
               gameOver={gameOver}
               gfx={gfx}
+              ping={ping}
               onReady={(ready) => connRef.current?.send({ type: "ready:set", ready })}
               onStart={() => connRef.current?.send({ type: "countdown:start" })}
               onSelectGame={(gameKey) => connRef.current?.send({ type: "game:select", gameKey })}

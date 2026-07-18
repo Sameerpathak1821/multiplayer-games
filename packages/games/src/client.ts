@@ -15,6 +15,7 @@ export {
 } from "./tic-tac-toe/logic";
 
 export * from "./crossword/types";
+export * from "./arena/types";
 
 export interface GameListing {
   key: string;
@@ -40,6 +41,14 @@ export const GAME_LIST: GameListing[] = [
     displayName: "Crossword Race",
     description: "Same grid, 3 minutes — fastest solver wins.",
     icon: "🧩",
+    minPlayers: 1,
+    maxPlayers: 8,
+  },
+  {
+    key: "arena",
+    displayName: "Orb Arena",
+    description: "WASD to move — first to 10 orbs wins. Real-time!",
+    icon: "🔮",
     minPlayers: 1,
     maxPlayers: 8,
   },

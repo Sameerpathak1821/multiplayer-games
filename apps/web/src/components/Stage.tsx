@@ -5,6 +5,7 @@ import type { GfxPref } from "../lib/quality";
 import type { GameOverMsg, GameStateMsg } from "../lib/room";
 import TicTacToeBoard from "./games/TicTacToeBoard";
 import CrosswordBoard from "./games/CrosswordBoard";
+import ArenaBoard from "./games/ArenaBoard";
 import { SeatsRow, TurnStatus } from "./games/TicTacToeChrome";
 
 // Three.js loads only when a 3D stage actually renders.
@@ -30,6 +31,7 @@ interface Props {
   gameState: GameStateMsg | null;
   gameOver: GameOverMsg | null;
   gfx: GfxPref;
+  ping: number | null;
   onReady(ready: boolean): void;
   onStart(): void;
   onSelectGame(gameKey: string | null): void;
@@ -46,6 +48,7 @@ export default function Stage({
   gameState,
   gameOver,
   gfx,
+  ping,
   onReady,
   onStart,
   onSelectGame,
@@ -224,6 +227,8 @@ export default function Stage({
                 <TicTacToeBoard game={gameState} you={you} finished={false} onMove={(cell) => onMove({ cell })} />
               ) : gameState.gameKey === "crossword" ? (
                 <CrosswordBoard game={gameState} you={you} finished={false} onMove={onMove} />
+              ) : gameState.gameKey === "arena" ? (
+                <ArenaBoard game={gameState} you={you} finished={false} ping={ping} onMove={onMove} />
               ) : (
                 <p className="text-ink-muted">Unknown game: {gameState.gameKey}</p>
               )}

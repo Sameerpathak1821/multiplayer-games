@@ -47,6 +47,8 @@ export interface RoomHandlers {
   onError(code: string, message: string): void;
   onStatus(status: ConnectionStatus): void;
   onClosed(reason: ClosedReason): void;
+  /** Round-trip time measurement, reported every few seconds. */
+  onPing?(rttMs: number): void;
 }
 
 function reasonForCloseCode(code: number): ClosedReason {
@@ -76,6 +78,7 @@ export class RoomConnection {
   private stopped = false;
   private attempts = 0;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private pingTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private code: string,
@@ -97,6 +100,9 @@ export class RoomConnection {
     ws.onopen = () => {
       this.attempts = 0;
       this.handlers.onStatus("connected");
+      if (this.pingTimer) clearInterval(this.pingTimer);
+      this.pingTimer = setInterval(() => this.send({ type: "ping", t: Date.now() }), 2000);
+      this.send({ type: "ping", t: Date.now() });
     };
 
     ws.onmessage = (e) => {
@@ -135,6 +141,9 @@ export class RoomConnection {
           break;
         case "game:over":
           this.handlers.onGameOver({ result: msg.result, forfeit: msg.forfeit });
+          break;
+        case "pong":
+          if (msg.t !== undefined) this.handlers.onPing?.(Date.now() - msg.t);
           break;
         case "error":
           this.handlers.onError(msg.code, msg.message);
@@ -181,6 +190,7 @@ export class RoomConnection {
   dispose(): void {
     this.stopped = true;
     if (this.retryTimer) clearTimeout(this.retryTimer);
+    if (this.pingTimer) clearInterval(this.pingTimer);
     const ws = this.ws;
     this.ws = null;
     ws?.close(1000);

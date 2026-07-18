@@ -140,7 +140,7 @@ export class Room {
 
     switch (msg.type) {
       case "ping":
-        this.sendTo(member, { type: "pong" });
+        this.sendTo(member, { type: "pong", t: msg.t });
         break;
       case "leave":
         this.remove(sessionId, "left");

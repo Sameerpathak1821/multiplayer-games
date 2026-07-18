@@ -377,6 +377,40 @@ describe("Room", () => {
     }
   });
 
+  it("tick game (arena) simulates at 20Hz: movement, snapshots, time-up", () => {
+    const s1 = new FakeSocket();
+    room.join(session("a"), s1);
+    room.handleMessage("a", { type: "game:select", gameKey: "arena" });
+    room.handleMessage("a", { type: "ready:set", ready: true });
+    room.handleMessage("a", { type: "countdown:start" });
+    vi.advanceTimersByTime(3000);
+    expect(room.snapshot().phase).toBe("playing");
+
+    const startView = () => {
+      const gs = s1.sent.filter((m) => m.type === "game:state").at(-1);
+      return gs?.type === "game:state"
+        ? (gs.view as { players: Array<{ sessionId: string; x: number; lastSeq: number }> })
+        : null;
+    };
+    const before = startView()!.players[0]!;
+
+    // Hold right for one simulated second → ~20 ticks of movement + snapshots.
+    room.handleMessage("a", { type: "game:intent", payload: { seq: 3, dx: 1, dy: 0 } });
+    const snapshotsBefore = s1.sent.filter((m) => m.type === "game:state").length;
+    vi.advanceTimersByTime(1000);
+    const snapshotsAfter = s1.sent.filter((m) => m.type === "game:state").length;
+    const after = startView()!.players[0]!;
+
+    expect(snapshotsAfter - snapshotsBefore).toBeGreaterThanOrEqual(18);
+    expect(after.x - before.x).toBeGreaterThan(200); // ~240 units/s
+    expect(after.lastSeq).toBe(3);
+
+    // Runs out at the 5s test duration.
+    vi.advanceTimersByTime(4001);
+    expect(s1.sent.some((m) => m.type === "game:over")).toBe(true);
+    expect(room.snapshot().phase).toBe("postgame");
+  });
+
   it("countdown refuses to start unless everyone connected is ready, and only for the owner", () => {
     const s1 = new FakeSocket();
     const s2 = new FakeSocket();
