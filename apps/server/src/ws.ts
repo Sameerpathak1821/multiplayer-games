@@ -3,6 +3,10 @@ import { WebSocketServer, type WebSocket } from "ws";
 import { CLOSE_CODES, clientMessageSchema, isValidRoomCode } from "@gamehub/shared";
 import { verifySessionToken } from "./auth";
 import type { RoomManager } from "./rooms/manager";
+import { RateLimiter } from "./rateLimit";
+
+/** Join attempts per IP — makes room-code scanning infeasible. */
+const upgradeLimiter = new RateLimiter(30, 60_000);
 
 /**
  * Attach the room WebSocket endpoint at /ws?code=XXXXXX&token=…
@@ -10,11 +14,17 @@ import type { RoomManager } from "./rooms/manager";
  * reach a room.
  */
 export function attachRoomSockets(httpServer: HttpServer, manager: RoomManager): void {
-  const wss = new WebSocketServer({ noServer: true });
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 8 * 1024 });
 
   httpServer.on("upgrade", async (request, socket, head) => {
     const url = new URL(request.url ?? "/", "http://localhost");
     if (url.pathname !== "/ws") {
+      socket.destroy();
+      return;
+    }
+
+    const ip = request.socket.remoteAddress ?? "unknown";
+    if (!upgradeLimiter.allow(ip)) {
       socket.destroy();
       return;
     }

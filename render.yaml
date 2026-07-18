@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: gamehub
+    runtime: node
+    plan: free
+    buildCommand: npm install -g pnpm@11 && pnpm install && pnpm build
+    startCommand: pnpm --filter @gamehub/server start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: AUTH_SECRET
+        generateValue: true
