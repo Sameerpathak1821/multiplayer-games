@@ -1,9 +1,13 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { GuestSession } from "@gamehub/shared";
 import { isValidRoomCode } from "@gamehub/shared";
 import { ensureGuestSession, getToken } from "../lib/session";
-import HeroScene from "../scene/HeroScene";
+import { systemAllows3D } from "../lib/quality";
+
+// Three.js stays out of the main bundle; the page renders instantly and the
+// scene fades in when ready.
+const HeroScene = lazy(() => import("../scene/HeroScene"));
 
 const LAUNCH_GAMES = [
   { name: "Tic-Tac-Toe", tag: "Turn duel", accent: "#22d3ee" },
@@ -59,7 +63,11 @@ export default function Landing() {
 
   return (
     <div className="relative h-full overflow-hidden">
-      <HeroScene />
+      {systemAllows3D() && (
+        <Suspense fallback={null}>
+          <HeroScene />
+        </Suspense>
+      )}
 
       {/* DOM layer floating over the scene */}
       <div className="relative z-10 flex h-full flex-col">

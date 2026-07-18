@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import type { ChatMessage, RoomEvent, RoomSnapshot } from "@gamehub/shared";
 import { AVATAR_COLORS, isValidRoomCode } from "@gamehub/shared";
 import { ensureGuestSession, getToken } from "../lib/session";
+import { getGfxPref, setGfxPref, systemAllows3D, type GfxPref } from "../lib/quality";
 import {
   RoomConnection,
   type ClosedReason,
@@ -60,6 +61,7 @@ export default function Lobby() {
   const [copied, setCopied] = useState(false);
   const [needsPassword, setNeedsPassword] = useState(false);
   const [pwInput, setPwInput] = useState("");
+  const [gfx, setGfx] = useState<GfxPref>(getGfxPref);
   const connRef = useRef<RoomConnection | null>(null);
 
   const openConnection = useCallback(
@@ -246,14 +248,29 @@ export default function Lobby() {
           {room?.hasPassword && <span className="mr-2 text-xl align-middle">🔒</span>}
           {roomCode}
         </button>
-        <div className="w-40 text-center text-xs text-ink-muted sm:text-right">
-          {status !== "connected"
-            ? status === "connecting"
-              ? "Connecting…"
-              : "Reconnecting…"
-            : copied
-              ? "Invite link copied!"
-              : "Click code to copy link"}
+        <div className="flex w-48 items-center justify-center gap-3 sm:justify-end">
+          <span className="text-xs text-ink-muted">
+            {status !== "connected"
+              ? status === "connecting"
+                ? "Connecting…"
+                : "Reconnecting…"
+              : copied
+                ? "Invite link copied!"
+                : "Click code to copy link"}
+          </span>
+          {systemAllows3D() && (
+            <button
+              onClick={() => {
+                const next = gfx === "3d" ? "2d" : "3d";
+                setGfxPref(next);
+                setGfx(next);
+              }}
+              className="glass rounded-full px-3 py-1 text-xs font-medium transition hover:text-accent"
+              title="Toggle 3D graphics"
+            >
+              {gfx === "3d" ? "3D ✨" : "2D"}
+            </button>
+          )}
         </div>
       </header>
 
@@ -285,6 +302,7 @@ export default function Lobby() {
               reactions={reactions}
               gameState={gameState}
               gameOver={gameOver}
+              gfx={gfx}
               onReady={(ready) => connRef.current?.send({ type: "ready:set", ready })}
               onStart={() => connRef.current?.send({ type: "countdown:start" })}
               onSelectGame={(gameKey) => connRef.current?.send({ type: "game:select", gameKey })}

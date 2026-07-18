@@ -1,7 +1,13 @@
+import { Suspense, lazy } from "react";
 import type { RoomSnapshot } from "@gamehub/shared";
-import { GAME_LIST } from "@gamehub/games";
+import { GAME_LIST, winnerInfo, type TicTacToeState } from "@gamehub/games";
+import type { GfxPref } from "../lib/quality";
 import type { GameOverMsg, GameStateMsg } from "../lib/room";
 import TicTacToeBoard from "./games/TicTacToeBoard";
+import { SeatsRow, TurnStatus } from "./games/TicTacToeChrome";
+
+// Three.js loads only when a 3D stage actually renders.
+const GameStage3D = lazy(() => import("../scene/GameStage3D"));
 
 export interface FloatingReaction {
   id: string;
@@ -25,36 +31,11 @@ interface Props {
   reactions: FloatingReaction[];
   gameState: GameStateMsg | null;
   gameOver: GameOverMsg | null;
+  gfx: GfxPref;
   onReady(ready: boolean): void;
   onStart(): void;
   onSelectGame(gameKey: string | null): void;
   onMove(payload: unknown): void;
-}
-
-function GameBoard({
-  gameState,
-  you,
-  finished,
-  onMove,
-}: {
-  gameState: GameStateMsg;
-  you: string | null;
-  finished: boolean;
-  onMove(payload: unknown): void;
-}) {
-  switch (gameState.gameKey) {
-    case "tic-tac-toe":
-      return (
-        <TicTacToeBoard
-          game={gameState}
-          you={you}
-          finished={finished}
-          onMove={(cell) => onMove({ cell })}
-        />
-      );
-    default:
-      return <p className="text-ink-muted">Unknown game: {gameState.gameKey}</p>;
-  }
 }
 
 export default function Stage({
@@ -66,6 +47,7 @@ export default function Stage({
   reactions,
   gameState,
   gameOver,
+  gfx,
   onReady,
   onStart,
   onSelectGame,
@@ -77,6 +59,16 @@ export default function Stage({
   const allReady = connected.length > 0 && connected.every((m) => m.ready);
   const selected = GAME_LIST.find((g) => g.key === room.gameKey);
   const enoughPlayers = !selected || connected.length >= selected.minPlayers;
+
+  // Tic-tac-toe 3D scene inputs (the only 3D game so far).
+  const isTtt = !gameState || gameState.gameKey === "tic-tac-toe";
+  const use3D = gfx === "3d" && isTtt;
+  const view = isTtt ? (gameState?.view as TicTacToeState | undefined) : undefined;
+  const info = view ? winnerInfo(view.board) : null;
+  const winLine = info !== null && info !== "draw" && info !== null ? [...(info?.line ?? [])] : null;
+  const yourSeat = view ? (you === view.xId ? "X" : you === view.oId ? "O" : null) : null;
+  const canPlay =
+    room.phase === "playing" && !!view && yourSeat !== null && gameState?.turn?.sessionId === you;
 
   function resultLine(): string {
     if (!gameOver) return "";
@@ -97,7 +89,7 @@ export default function Stage({
   }
 
   const readyControls = (
-    <div className="flex flex-col items-center gap-2.5">
+    <div className="pointer-events-auto flex flex-col items-center gap-2.5">
       <button
         onClick={() => onReady(!me?.ready)}
         className={`rounded-xl px-7 py-3 font-semibold transition active:scale-[0.98] ${
@@ -131,8 +123,66 @@ export default function Stage({
     </div>
   );
 
+  const picker = (
+    <div className="pointer-events-auto">
+      <p className="mb-3 text-center text-sm text-ink-muted">
+        {isOwner ? "Pick a game" : "The host picks the game"}
+      </p>
+      <div className="flex flex-wrap justify-center gap-3">
+        {GAME_LIST.map((g) => (
+          <button
+            key={g.key}
+            onClick={() => isOwner && onSelectGame(room.gameKey === g.key ? null : g.key)}
+            disabled={!isOwner}
+            className={`w-44 rounded-2xl p-4 text-left backdrop-blur-md transition ${
+              room.gameKey === g.key
+                ? "bg-accent/15 ring-2 ring-accent"
+                : "bg-surface-raised/70 " + (isOwner ? "hover:bg-line/60" : "")
+            }`}
+          >
+            <div className="text-2xl">⭕</div>
+            <div className="mt-1.5 font-semibold">{g.displayName}</div>
+            <div className="mt-0.5 text-xs text-ink-muted">{g.description}</div>
+            <div className="mt-1 text-[10px] text-ink-muted">
+              {g.minPlayers === g.maxPlayers
+                ? `${g.minPlayers} players`
+                : `${g.minPlayers}–${g.maxPlayers} players`}
+            </div>
+          </button>
+        ))}
+        {COMING_SOON.map((g) => (
+          <div
+            key={g.key}
+            className="w-44 rounded-2xl bg-surface-raised/40 p-4 opacity-50 backdrop-blur-md"
+            title="Coming soon"
+          >
+            <div className="text-2xl">🔒</div>
+            <div className="mt-1.5 font-semibold">{g.displayName}</div>
+            <div className="mt-0.5 text-xs text-ink-muted">Coming in {g.note}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
-    <div className="glass relative flex h-full min-h-0 flex-col overflow-hidden rounded-2xl p-5">
+    <div className="glass relative flex h-full min-h-0 flex-col overflow-hidden rounded-2xl">
+      {/* 3D scene layer */}
+      {use3D && (
+        <div className="absolute inset-0 z-0">
+          <Suspense fallback={null}>
+            <GameStage3D
+              phase={room.phase}
+              board={view?.board ?? null}
+              turnSeat={view?.turnSeat ?? null}
+              winLine={winLine}
+              canPlay={canPlay}
+              onCellClick={(cell) => onMove({ cell })}
+            />
+          </Suspense>
+        </div>
+      )}
+
       {/* Floating emoji reactions overlay */}
       <div className="pointer-events-none absolute inset-0 z-20">
         {reactions.map((r) => (
@@ -158,83 +208,63 @@ export default function Stage({
         </div>
       )}
 
-      {room.phase === "playing" && gameState ? (
-        <GameBoard gameState={gameState} you={you} finished={false} onMove={onMove} />
-      ) : room.phase === "postgame" ? (
-        <div className="flex h-full min-h-0 flex-col items-center justify-center gap-5">
-          {gameState && (
-            <div className="max-h-[45%] shrink-0">
-              <GameBoard gameState={gameState} you={you} finished onMove={() => {}} />
+      {/* DOM content layer */}
+      <div className="pointer-events-none relative z-10 flex h-full min-h-0 flex-col p-5">
+        {room.phase === "playing" && gameState ? (
+          use3D ? (
+            <>
+              <div className="flex justify-center">
+                <SeatsRow game={gameState} you={you} finished={false} />
+              </div>
+              <div className="mt-auto flex justify-center">
+                <TurnStatus game={gameState} you={you} finished={false} />
+              </div>
+            </>
+          ) : (
+            <div className="pointer-events-auto h-full">
+              {gameState.gameKey === "tic-tac-toe" ? (
+                <TicTacToeBoard game={gameState} you={you} finished={false} onMove={(cell) => onMove({ cell })} />
+              ) : (
+                <p className="text-ink-muted">Unknown game: {gameState.gameKey}</p>
+              )}
             </div>
-          )}
-          <div className="text-center">
-            <div className="font-(family-name:--font-display) text-2xl font-bold">
-              {resultLine()}
+          )
+        ) : room.phase === "postgame" ? (
+          <div className="flex h-full min-h-0 flex-col items-center justify-end gap-4 pb-2">
+            {!use3D && gameState && gameState.gameKey === "tic-tac-toe" && (
+              <div className="pointer-events-auto min-h-0 flex-1">
+                <TicTacToeBoard game={gameState} you={you} finished onMove={() => {}} />
+              </div>
+            )}
+            <div className="pointer-events-auto glass rounded-2xl px-6 py-4 text-center">
+              <div className="font-(family-name:--font-display) text-2xl font-bold">
+                {resultLine()}
+              </div>
             </div>
+            {readyControls}
+            {isOwner && (
+              <button
+                onClick={() => onSelectGame(null)}
+                className="pointer-events-auto text-xs text-ink-muted underline-offset-2 hover:text-ink hover:underline"
+              >
+                Choose a different game
+              </button>
+            )}
           </div>
-          {readyControls}
-          {isOwner && (
-            <button
-              onClick={() => onSelectGame(null)}
-              className="text-xs text-ink-muted underline-offset-2 hover:text-ink hover:underline"
-            >
-              Choose a different game
-            </button>
-          )}
-        </div>
-      ) : launched && !room.gameKey ? (
-        <div className="flex h-full flex-col items-center justify-center text-center">
-          <div className="font-(family-name:--font-display) text-3xl font-bold text-success">
-            Everyone's in! 🎉
-          </div>
-          <p className="mt-3 max-w-sm text-ink-muted">Pick a game to actually play something.</p>
-        </div>
-      ) : (
-        <div className="flex h-full min-h-0 flex-col items-center justify-center gap-6">
-          {/* Game picker */}
-          <div>
-            <p className="mb-3 text-center text-sm text-ink-muted">
-              {isOwner ? "Pick a game" : "The host picks the game"}
-            </p>
-            <div className="flex flex-wrap justify-center gap-3">
-              {GAME_LIST.map((g) => (
-                <button
-                  key={g.key}
-                  onClick={() => isOwner && onSelectGame(room.gameKey === g.key ? null : g.key)}
-                  disabled={!isOwner}
-                  className={`w-44 rounded-2xl p-4 text-left transition ${
-                    room.gameKey === g.key
-                      ? "bg-accent/15 ring-2 ring-accent"
-                      : "bg-surface-raised/70 " + (isOwner ? "hover:bg-line/60" : "")
-                  }`}
-                >
-                  <div className="text-2xl">⭕</div>
-                  <div className="mt-1.5 font-semibold">{g.displayName}</div>
-                  <div className="mt-0.5 text-xs text-ink-muted">{g.description}</div>
-                  <div className="mt-1 text-[10px] text-ink-muted">
-                    {g.minPlayers === g.maxPlayers
-                      ? `${g.minPlayers} players`
-                      : `${g.minPlayers}–${g.maxPlayers} players`}
-                  </div>
-                </button>
-              ))}
-              {COMING_SOON.map((g) => (
-                <div
-                  key={g.key}
-                  className="w-44 rounded-2xl bg-surface-raised/40 p-4 opacity-50"
-                  title="Coming soon"
-                >
-                  <div className="text-2xl">🔒</div>
-                  <div className="mt-1.5 font-semibold">{g.displayName}</div>
-                  <div className="mt-0.5 text-xs text-ink-muted">Coming in {g.note}</div>
-                </div>
-              ))}
+        ) : launched && !room.gameKey ? (
+          <div className="flex h-full flex-col items-center justify-center text-center">
+            <div className="font-(family-name:--font-display) text-3xl font-bold text-success">
+              Everyone's in! 🎉
             </div>
+            <p className="mt-3 max-w-sm text-ink-muted">Pick a game to actually play something.</p>
           </div>
-
-          {room.gameKey && readyControls}
-        </div>
-      )}
+        ) : (
+          <div className="flex h-full min-h-0 flex-col items-center justify-center gap-6">
+            {picker}
+            {room.gameKey && readyControls}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
