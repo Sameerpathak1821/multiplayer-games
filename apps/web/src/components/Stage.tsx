@@ -238,7 +238,8 @@ export default function Stage({
             </div>
           )
         ) : room.phase === "postgame" ? (
-          <div className="flex h-full min-h-0 flex-col items-center justify-end gap-4 pb-2">
+          <div className="pointer-events-auto flex h-full min-h-0 flex-col overflow-y-auto pb-2">
+            <div className="mt-auto flex flex-col items-center gap-4">
             {!use3D && gameState && gameState.gameKey === "tic-tac-toe" && (
               <div className="pointer-events-auto min-h-0 flex-1">
                 <TicTacToeBoard game={gameState} you={you} finished onMove={() => {}} />
@@ -277,6 +278,7 @@ export default function Stage({
                 Choose a different game
               </button>
             )}
+            </div>
           </div>
         ) : launched && !room.gameKey ? (
           <div className="flex h-full flex-col items-center justify-center text-center">
@@ -286,9 +288,11 @@ export default function Stage({
             <p className="mt-3 max-w-sm text-ink-muted">Pick a game to actually play something.</p>
           </div>
         ) : (
-          <div className="flex h-full min-h-0 flex-col items-center justify-center gap-6">
-            {picker}
-            {room.gameKey && readyControls}
+          <div className="pointer-events-auto flex h-full min-h-0 flex-col overflow-y-auto">
+            <div className="m-auto flex flex-col items-center gap-5 py-2">
+              {picker}
+              {room.gameKey && readyControls}
+            </div>
           </div>
         )}
       </div>
