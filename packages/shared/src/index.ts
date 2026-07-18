@@ -41,6 +41,19 @@ export const AVATAR_COLORS = [
   "#c084fc", // purple
 ] as const;
 
+/** Player-editable profile fields (no accounts — this is all there is). */
+export const profileUpdateSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(2)
+    .max(24)
+    // Printable characters only — no control chars or zero-width tricks.
+    .regex(/^[^\p{C}]+$/u),
+  avatarColor: z.string(),
+});
+export type ProfileUpdate = z.infer<typeof profileUpdateSchema>;
+
 export function isValidRoomCode(code: string): boolean {
   if (code.length !== ROOM_CODE_LENGTH) return false;
   return [...code].every((ch) => ROOM_CODE_ALPHABET.includes(ch));

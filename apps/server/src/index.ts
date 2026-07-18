@@ -1,6 +1,11 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
-import { MAX_ROOM_PLAYERS, isValidRoomCode } from "@gamehub/shared";
+import {
+  AVATAR_COLORS,
+  MAX_ROOM_PLAYERS,
+  isValidRoomCode,
+  profileUpdateSchema,
+} from "@gamehub/shared";
 import { createGuestSession, signSession, verifySessionToken } from "./auth";
 import { RoomManager } from "./rooms/manager";
 import { attachRoomSockets } from "./ws";
@@ -31,6 +36,31 @@ app.post("/auth/guest", async (request) => {
   const session = createGuestSession();
   const token = await signSession(session);
   return { token, session };
+});
+
+/**
+ * Update the guest profile (name + avatar color). Keeps the same sessionId —
+ * rooms recognize the player across the change — and returns a re-signed token.
+ */
+app.post("/auth/profile", async (request, reply) => {
+  const auth = request.headers.authorization;
+  const session = auth?.startsWith("Bearer ")
+    ? await verifySessionToken(auth.slice("Bearer ".length))
+    : null;
+  if (!session) return reply.status(401).send({ error: "unauthorized" });
+
+  const parsed = profileUpdateSchema.safeParse(request.body);
+  if (!parsed.success || !(AVATAR_COLORS as readonly string[]).includes(parsed.data.avatarColor)) {
+    return reply.status(400).send({ error: "invalid profile" });
+  }
+
+  const updated = {
+    ...session,
+    name: parsed.data.name.trim(),
+    avatarColor: parsed.data.avatarColor,
+  };
+  const token = await signSession(updated);
+  return { token, session: updated };
 });
 
 app.post("/rooms", async (request, reply) => {

@@ -4,6 +4,7 @@ import type { GuestSession } from "@gamehub/shared";
 import { isValidRoomCode } from "@gamehub/shared";
 import { ensureGuestSession, getToken } from "../lib/session";
 import { systemAllows3D } from "../lib/quality";
+import ProfileEditor from "../components/ProfileEditor";
 
 // Three.js stays out of the main bundle; the page renders instantly and the
 // scene fades in when ready.
@@ -21,6 +22,7 @@ export default function Landing() {
   const [joinCode, setJoinCode] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
 
   useEffect(() => {
     ensureGuestSession()
@@ -76,14 +78,19 @@ export default function Landing() {
             Game<span className="text-accent">Hub</span>
           </div>
           {session && (
-            <div className="glass flex items-center gap-2 rounded-full px-4 py-1.5 text-sm">
+            <button
+              onClick={() => setEditingProfile(true)}
+              className="glass flex items-center gap-2 rounded-full px-4 py-1.5 text-sm transition hover:ring-1 hover:ring-accent/50"
+              title="Edit your name and color"
+            >
               <span
                 className="inline-block size-2.5 rounded-full"
                 style={{ backgroundColor: session.avatarColor }}
               />
               <span className="text-ink-muted">playing as</span>
               <span className="font-medium">{session.name}</span>
-            </div>
+              <span className="text-xs text-ink-muted">✏️</span>
+            </button>
           )}
         </header>
 
@@ -145,6 +152,14 @@ export default function Landing() {
         <div className="glass absolute bottom-6 left-1/2 z-20 -translate-x-1/2 rounded-xl px-5 py-3 text-sm">
           {notice}
         </div>
+      )}
+
+      {editingProfile && session && (
+        <ProfileEditor
+          session={session}
+          onSaved={setSession}
+          onClose={() => setEditingProfile(false)}
+        />
       )}
     </div>
   );

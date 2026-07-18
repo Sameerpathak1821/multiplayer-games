@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import type { ChatMessage, RoomEvent, RoomSnapshot } from "@gamehub/shared";
+import type { ChatMessage, GuestSession, RoomEvent, RoomSnapshot } from "@gamehub/shared";
 import { AVATAR_COLORS, isValidRoomCode } from "@gamehub/shared";
+import ProfileEditor from "../components/ProfileEditor";
 import { ensureGuestSession, getToken } from "../lib/session";
 import { getGfxPref, setGfxPref, systemAllows3D, type GfxPref } from "../lib/quality";
 import {
@@ -63,6 +64,8 @@ export default function Lobby() {
   const [pwInput, setPwInput] = useState("");
   const [gfx, setGfx] = useState<GfxPref>(getGfxPref);
   const [ping, setPing] = useState<number | null>(null);
+  const [session, setSession] = useState<GuestSession | null>(null);
+  const [editingProfile, setEditingProfile] = useState(false);
   const connRef = useRef<RoomConnection | null>(null);
 
   const openConnection = useCallback(
@@ -153,8 +156,9 @@ export default function Lobby() {
     let disposed = false;
 
     (async () => {
-      await ensureGuestSession();
+      const s = await ensureGuestSession();
       if (disposed) return;
+      setSession(s);
       // Ask first whether the room needs a password, to prompt before connecting.
       const info = await fetch(`/api/rooms/${roomCode}`).then((r) => r.json());
       if (disposed) return;
@@ -260,6 +264,15 @@ export default function Lobby() {
                 ? "Invite link copied!"
                 : "Click code to copy link"}
           </span>
+          {session && (
+            <button
+              onClick={() => setEditingProfile(true)}
+              className="glass rounded-full px-2.5 py-1 text-xs transition hover:text-accent"
+              title="Edit your name and color"
+            >
+              ✏️
+            </button>
+          )}
           {ping !== null && status === "connected" && (
             <span
               className={`font-mono text-[10px] ${ping < 80 ? "text-success" : ping < 200 ? "text-ink-muted" : "text-danger"}`}
@@ -342,6 +355,19 @@ export default function Lobby() {
         <div className="glass absolute bottom-6 left-1/2 z-20 -translate-x-1/2 rounded-xl px-5 py-3 text-sm">
           {toast}
         </div>
+      )}
+
+      {editingProfile && session && (
+        <ProfileEditor
+          session={session}
+          onSaved={(updated) => {
+            setSession(updated);
+            // Reconnect with the re-signed token so the whole room sees the
+            // new name (existing members bypass the room password).
+            openConnection();
+          }}
+          onClose={() => setEditingProfile(false)}
+        />
       )}
     </div>
   );
