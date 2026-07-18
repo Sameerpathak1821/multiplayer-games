@@ -64,7 +64,7 @@ export default function Landing() {
   }
 
   return (
-    <div className="relative h-full overflow-hidden">
+    <div className="relative min-h-dvh overflow-x-hidden">
       {systemAllows3D() && (
         <Suspense fallback={null}>
           <HeroScene />
@@ -72,7 +72,7 @@ export default function Landing() {
       )}
 
       {/* DOM layer floating over the scene */}
-      <div className="relative z-10 flex h-full flex-col">
+      <div className="relative z-10 flex min-h-dvh flex-col">
         <header className="flex items-center justify-between px-6 py-4 sm:px-10">
           <div className="font-(family-name:--font-display) text-xl font-bold tracking-tight">
             Game<span className="text-accent">Hub</span>

@@ -241,7 +241,7 @@ export default function Lobby() {
   const isOwner = you !== null && room?.ownerSessionId === you;
 
   return (
-    <div className="flex h-full flex-col px-4 py-4 sm:px-6">
+    <div className="flex min-h-dvh flex-col px-3 py-3 sm:px-6 sm:py-4 lg:h-dvh lg:min-h-0">
       <header className="mb-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 sm:justify-between">
         <div className="font-(family-name:--font-display) text-lg font-bold tracking-tight">
           Game<span className="text-accent">Hub</span>
@@ -297,8 +297,8 @@ export default function Lobby() {
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[280px_1fr_320px]">
-        <div className="order-2 min-h-56 lg:order-1">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-[280px_1fr_320px]">
+        <div className="order-2 h-72 lg:order-1 lg:h-auto lg:min-h-0">
           {room && (
             <PlayerList
               room={room}
@@ -314,7 +314,7 @@ export default function Lobby() {
           )}
         </div>
 
-        <div className="order-1 min-h-72 lg:order-2">
+        <div className="order-1 h-[62dvh] min-h-96 lg:order-2 lg:h-auto lg:min-h-0">
           {room && (
             <Stage
               room={room}
@@ -335,7 +335,7 @@ export default function Lobby() {
           )}
         </div>
 
-        <div className="order-3 min-h-72">
+        <div className="order-3 h-96 lg:h-auto lg:min-h-0">
           <ChatPanel
             messages={chat}
             you={you}

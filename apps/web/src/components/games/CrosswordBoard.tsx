@@ -179,10 +179,12 @@ export default function CrosswordBoard({ game, you, finished, onMove }: Props) {
 
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto md:grid-cols-[auto_1fr]">
         {/* Grid */}
-        <div className="flex flex-col items-center gap-3">
+        <div className="flex max-w-full flex-col items-center gap-3 overflow-x-auto">
           <div
             className="grid gap-1"
-            style={{ gridTemplateColumns: `repeat(${view.width}, minmax(0, 2.1rem))` }}
+            style={{
+              gridTemplateColumns: `repeat(${view.width}, minmax(0, min(2.1rem, ${(88 / view.width).toFixed(1)}vw)))`,
+            }}
           >
             {Array.from({ length: view.width * view.height }, (_, i) =>
               playable.has(i) ? (
