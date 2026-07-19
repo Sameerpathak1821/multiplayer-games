@@ -41,6 +41,11 @@ export default function ShooterBoard({ game, you, finished, ping, onMove }: Prop
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameRef = useRef(game);
   gameRef.current = game;
+  // Keep the latest onMove without re-running the input effect (the
+  // component re-renders at snapshot rate; recreating the send interval
+  // every render would starve it).
+  const onMoveRef = useRef(onMove);
+  onMoveRef.current = onMove;
 
   const snapshotsRef = useRef<Snapshot[]>([]);
   const myPosRef = useRef<{ x: number; y: number } | null>(null);
@@ -108,13 +113,20 @@ export default function ShooterBoard({ game, you, finished, ping, onMove }: Prop
       mouseRef.current = toWorld(e.clientX, e.clientY);
     }
     function onMouseDown(e: MouseEvent) {
-      if (e.button === 0) inputRef.current.fire = true;
+      if (e.button === 0) {
+        inputRef.current.fire = true;
+        sendInput(true);
+      }
     }
     function onMouseUp(e: MouseEvent) {
-      if (e.button === 0) inputRef.current.fire = false;
+      if (e.button === 0) {
+        inputRef.current.fire = false;
+        sendInput(true);
+      }
     }
 
     // Touch: left half = move stick, right half = aim + fire stick.
+    let fireLatch: ReturnType<typeof setTimeout> | null = null;
     function onTouchStart(e: TouchEvent) {
       e.preventDefault();
       const rect = canvas!.getBoundingClientRect();
@@ -124,7 +136,9 @@ export default function ShooterBoard({ game, you, finished, ping, onMove }: Prop
         if (isLeft && !sticksRef.current.move) sticksRef.current.move = stick;
         else if (!isLeft && !sticksRef.current.aim) {
           sticksRef.current.aim = stick;
+          if (fireLatch) clearTimeout(fireLatch);
           inputRef.current.fire = true;
+          sendInput(true); // fire the moment the thumb lands
         }
       }
     }
@@ -156,20 +170,29 @@ export default function ShooterBoard({ game, you, finished, ping, onMove }: Prop
           sticksRef.current.move = null;
           inputRef.current.dx = 0;
           inputRef.current.dy = 0;
+          sendInput(true);
         }
         if (sticksRef.current.aim?.id === t.identifier) {
           sticksRef.current.aim = null;
-          inputRef.current.fire = false;
+          // Latch fire briefly so even the quickest tap gets a shot off.
+          if (fireLatch) clearTimeout(fireLatch);
+          fireLatch = setTimeout(() => {
+            inputRef.current.fire = false;
+            sendInput(true);
+          }, 160);
         }
       }
     }
 
-    // Fixed-rate input sender: aim follows the mouse relative to my
-    // predicted position, packets only when something is active or changed.
+    // Input sender: fixed-rate while anything is active, plus immediate
+    // sends on fire/stop events (so quick taps never miss the window).
+    // Mouse aim only applies on fine pointers — phones must not have a
+    // stale synthetic mouse position hijacking the aim stick.
+    const coarse = isCoarsePointer();
     let lastSent = "";
-    const sender = setInterval(() => {
+    function sendInput(force = false) {
       const inp = inputRef.current;
-      if (mouseRef.current && myPosRef.current) {
+      if (!coarse && mouseRef.current && myPosRef.current) {
         const ax = mouseRef.current.x - myPosRef.current.x;
         const ay = mouseRef.current.y - myPosRef.current.y;
         const len = Math.hypot(ax, ay) || 1;
@@ -185,12 +208,13 @@ export default function ShooterBoard({ game, you, finished, ping, onMove }: Prop
       };
       const sig = JSON.stringify(payload);
       const active = inp.fire || inp.dx !== 0 || inp.dy !== 0;
-      if (sig !== lastSent || active) {
+      if (force || sig !== lastSent || active) {
         lastSent = sig;
         seqRef.current += 1;
-        onMove({ seq: seqRef.current, ...payload });
+        onMoveRef.current({ seq: seqRef.current, ...payload });
       }
-    }, INPUT_SEND_MS);
+    }
+    const sender = setInterval(sendInput, INPUT_SEND_MS);
 
     window.addEventListener("keydown", onKey);
     window.addEventListener("keyup", onKey);
@@ -203,6 +227,7 @@ export default function ShooterBoard({ game, you, finished, ping, onMove }: Prop
     canvas.addEventListener("touchcancel", onTouchEnd);
     return () => {
       clearInterval(sender);
+      if (fireLatch) clearTimeout(fireLatch);
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("keyup", onKey);
       canvas.removeEventListener("mousemove", onMouseMove);
@@ -213,7 +238,8 @@ export default function ShooterBoard({ game, you, finished, ping, onMove }: Prop
       canvas.removeEventListener("touchend", onTouchEnd);
       canvas.removeEventListener("touchcancel", onTouchEnd);
     };
-  }, [finished, you, onMove]);
+    // onMove intentionally excluded — accessed via onMoveRef.
+  }, [finished, you]);
 
   // Render loop.
   useEffect(() => {

@@ -39,6 +39,10 @@ export default function ArenaBoard({ game, you, finished, ping, onMove }: Props)
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameRef = useRef(game);
   gameRef.current = game;
+  // Latest onMove without re-running the input effect on every snapshot
+  // render (recreating the heartbeat interval constantly starves it).
+  const onMoveRef = useRef(onMove);
+  onMoveRef.current = onMove;
 
   const snapshotsRef = useRef<Snapshot[]>([]);
   const myPosRef = useRef<{ x: number; y: number } | null>(null);
@@ -84,7 +88,7 @@ export default function ArenaBoard({ game, you, finished, ping, onMove }: Props)
     function sendDir() {
       seqRef.current += 1;
       const d = dirRef.current;
-      onMove({ seq: seqRef.current, dx: d.dx, dy: d.dy });
+      onMoveRef.current({ seq: seqRef.current, dx: d.dx, dy: d.dy });
     }
 
     function onKey(e: KeyboardEvent) {
@@ -155,7 +159,8 @@ export default function ArenaBoard({ game, you, finished, ping, onMove }: Props)
       canvas?.removeEventListener("touchend", onTouchEnd);
       canvas?.removeEventListener("touchcancel", onTouchEnd);
     };
-  }, [finished, you, onMove]);
+    // onMove intentionally excluded — accessed via onMoveRef.
+  }, [finished, you]);
 
   // Render loop: predict self, interpolate others.
   useEffect(() => {
