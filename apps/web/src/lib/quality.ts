@@ -29,6 +29,11 @@ export function setGfxPref(pref: GfxPref): void {
   localStorage.setItem(PREF_KEY, pref);
 }
 
+/** Touch-first device? Drives on-screen game controls and hint text. */
+export function isCoarsePointer(): boolean {
+  return typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+}
+
 /** Rough device tier for resolution scaling. */
 export function deviceTier(): "high" | "low" {
   const nav = navigator as Navigator & { deviceMemory?: number };

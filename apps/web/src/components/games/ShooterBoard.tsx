@@ -9,6 +9,7 @@ import {
   type ShooterView,
 } from "@gamehub/games/client";
 import type { GameStateMsg } from "../../lib/room";
+import { isCoarsePointer } from "../../lib/quality";
 
 interface Props {
   game: GameStateMsg;
@@ -377,6 +378,29 @@ export default function ShooterBoard({ game, you, finished, ping, onMove }: Prop
         ctx.fillText(p.sessionId === you ? "you" : (meta?.name ?? ""), X(px), Y(py) - size / 2 - 14 * scale);
       }
 
+      // Resting thumb-zone hints so touch players can find the controls.
+      if (isCoarsePointer() && you && serverMe?.alive) {
+        const zones = [
+          { active: sticksRef.current.move, x: w * 0.16, label: "MOVE" },
+          { active: sticksRef.current.aim, x: w * 0.84, label: "AIM · FIRE" },
+        ];
+        const zy = h - 64 * devicePixelRatio;
+        for (const z of zones) {
+          if (z.active) continue;
+          ctx.strokeStyle = "rgba(232,236,244,0.22)";
+          ctx.setLineDash([6 * devicePixelRatio, 6 * devicePixelRatio]);
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(z.x, zy, 34 * devicePixelRatio, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle = "rgba(232,236,244,0.4)";
+          ctx.font = `${10 * devicePixelRatio}px Inter, sans-serif`;
+          ctx.textAlign = "center";
+          ctx.fillText(z.label, z.x, zy + 52 * devicePixelRatio);
+        }
+      }
+
       // Touch stick overlays.
       for (const key of ["move", "aim"] as const) {
         const s = sticksRef.current[key];
@@ -485,7 +509,9 @@ export default function ShooterBoard({ game, you, finished, ping, onMove }: Prop
 
       {you && !finished && (
         <p className="text-center text-xs text-ink-muted">
-          WASD to move · mouse to aim · click to fire — or dual thumbsticks on touch
+          {isCoarsePointer()
+            ? "Left thumb: move · Right thumb: aim & fire"
+            : "WASD to move · mouse to aim · click to fire"}
         </p>
       )}
     </div>

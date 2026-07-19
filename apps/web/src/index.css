@@ -32,6 +32,24 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* No double-tap zoom; keep text size stable on orientation change. */
+html {
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+}
+
+/*
+ * Mobile browsers auto-zoom into any focused input with font-size < 16px.
+ * Force 16px on touch devices so tapping chat/code/name fields never zooms.
+ */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 /* Frosted-glass panel — the DOM layer that floats above the 3D scene. */
 .glass {
   background: color-mix(in srgb, var(--color-surface) 72%, transparent);

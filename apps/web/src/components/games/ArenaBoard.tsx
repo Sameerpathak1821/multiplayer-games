@@ -7,6 +7,15 @@ import {
   type ArenaView,
 } from "@gamehub/games/client";
 import type { GameStateMsg } from "../../lib/room";
+import { isCoarsePointer } from "../../lib/quality";
+
+interface TouchStick {
+  id: number;
+  baseX: number;
+  baseY: number;
+  dx: number;
+  dy: number;
+}
 
 interface Props {
   game: GameStateMsg;
@@ -35,6 +44,7 @@ export default function ArenaBoard({ game, you, finished, ping, onMove }: Props)
   const myPosRef = useRef<{ x: number; y: number } | null>(null);
   const dirRef = useRef({ dx: 0, dy: 0 });
   const seqRef = useRef(0);
+  const stickRef = useRef<TouchStick | null>(null);
   const [, forceHud] = useState(0);
 
   // Record incoming snapshots for interpolation + reconciliation.
@@ -45,9 +55,11 @@ export default function ArenaBoard({ game, you, finished, ping, onMove }: Props)
     forceHud((n) => n + 1); // scores/clock re-render at snapshot rate
   }, [game]);
 
-  // Keyboard input: held keys -> direction; send on change + heartbeat.
+  // Input: keyboard held keys OR a touch joystick (drag anywhere on the
+  // arena) -> direction; send on change + heartbeat.
   useEffect(() => {
     if (finished || !you) return;
+    const canvas = canvasRef.current;
     const held = new Set<string>();
     const KEYS: Record<string, [number, number]> = {
       w: [0, -1], arrowup: [0, -1],
@@ -86,6 +98,43 @@ export default function ArenaBoard({ game, you, finished, ping, onMove }: Props)
       if (JSON.stringify(dirRef.current) !== before) sendDir();
     }
 
+    // Touch joystick: first finger anchors the stick, dragging steers.
+    function onTouchStart(e: TouchEvent) {
+      e.preventDefault();
+      if (stickRef.current) return;
+      const t = e.changedTouches[0]!;
+      stickRef.current = { id: t.identifier, baseX: t.clientX, baseY: t.clientY, dx: 0, dy: 0 };
+    }
+    function onTouchMove(e: TouchEvent) {
+      e.preventDefault();
+      const s = stickRef.current;
+      if (!s) return;
+      for (const t of Array.from(e.changedTouches)) {
+        if (t.identifier !== s.id) continue;
+        let dx = (t.clientX - s.baseX) / 40;
+        let dy = (t.clientY - s.baseY) / 40;
+        const len = Math.hypot(dx, dy);
+        if (len > 1) {
+          dx /= len;
+          dy /= len;
+        }
+        s.dx = dx;
+        s.dy = dy;
+        dirRef.current = { dx, dy };
+        sendDir();
+      }
+    }
+    function onTouchEnd(e: TouchEvent) {
+      const s = stickRef.current;
+      if (!s) return;
+      for (const t of Array.from(e.changedTouches)) {
+        if (t.identifier !== s.id) continue;
+        stickRef.current = null;
+        dirRef.current = { dx: 0, dy: 0 };
+        sendDir();
+      }
+    }
+
     // Heartbeat keeps the server's held-direction fresh across packet loss.
     const heartbeat = setInterval(() => {
       if (dirRef.current.dx !== 0 || dirRef.current.dy !== 0) sendDir();
@@ -93,10 +142,18 @@ export default function ArenaBoard({ game, you, finished, ping, onMove }: Props)
 
     window.addEventListener("keydown", onKey);
     window.addEventListener("keyup", onKey);
+    canvas?.addEventListener("touchstart", onTouchStart, { passive: false });
+    canvas?.addEventListener("touchmove", onTouchMove, { passive: false });
+    canvas?.addEventListener("touchend", onTouchEnd);
+    canvas?.addEventListener("touchcancel", onTouchEnd);
     return () => {
       clearInterval(heartbeat);
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("keyup", onKey);
+      canvas?.removeEventListener("touchstart", onTouchStart);
+      canvas?.removeEventListener("touchmove", onTouchMove);
+      canvas?.removeEventListener("touchend", onTouchEnd);
+      canvas?.removeEventListener("touchcancel", onTouchEnd);
     };
   }, [finished, you, onMove]);
 
@@ -229,6 +286,29 @@ export default function ArenaBoard({ game, you, finished, ping, onMove }: Props)
         );
       }
 
+      // Touch joystick overlay.
+      const stick = stickRef.current;
+      if (stick && canvas) {
+        const rect = canvas.getBoundingClientRect();
+        const bx = (stick.baseX - rect.left) * devicePixelRatio;
+        const by = (stick.baseY - rect.top) * devicePixelRatio;
+        ctx.strokeStyle = "rgba(232,236,244,0.35)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(bx, by, 34 * devicePixelRatio, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = "rgba(232,236,244,0.45)";
+        ctx.beginPath();
+        ctx.arc(
+          bx + stick.dx * 30 * devicePixelRatio,
+          by + stick.dy * 30 * devicePixelRatio,
+          14 * devicePixelRatio,
+          0,
+          Math.PI * 2,
+        );
+        ctx.fill();
+      }
+
       raf = requestAnimationFrame(draw);
     }
 
@@ -284,10 +364,14 @@ export default function ArenaBoard({ game, you, finished, ping, onMove }: Props)
         </div>
       </div>
 
-      <canvas ref={canvasRef} className="min-h-0 w-full flex-1 rounded-xl" />
+      <canvas ref={canvasRef} className="min-h-0 w-full flex-1 touch-none rounded-xl" />
 
       {you && !finished && (
-        <p className="text-center text-xs text-ink-muted">Move with WASD or arrow keys</p>
+        <p className="text-center text-xs text-ink-muted">
+          {isCoarsePointer()
+            ? "Touch and drag anywhere to move"
+            : "Move with WASD or arrow keys"}
+        </p>
       )}
     </div>
   );
