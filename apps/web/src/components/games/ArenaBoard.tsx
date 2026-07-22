@@ -221,9 +221,9 @@ export default function ArenaBoard({ game, you, finished, ping, onMove }: Props)
 
       ctx.clearRect(0, 0, w, h);
       // arena floor + grid
-      ctx.fillStyle = "#0e1320";
+      ctx.fillStyle = "#160c26";
       ctx.fillRect(ox, oy, ARENA_WORLD.width * scale, ARENA_WORLD.height * scale);
-      ctx.strokeStyle = "rgba(35,44,63,0.6)";
+      ctx.strokeStyle = "rgba(61,42,92,0.6)";
       ctx.lineWidth = 1;
       for (let gx = 0; gx <= ARENA_WORLD.width; gx += 80) {
         ctx.beginPath();
@@ -242,13 +242,13 @@ export default function ArenaBoard({ game, you, finished, ping, onMove }: Props)
       for (const orb of latest.orbs) {
         const r = ORB_RADIUS * scale;
         const g = ctx.createRadialGradient(X(orb.x), Y(orb.y), 0, X(orb.x), Y(orb.y), r * 2.2);
-        g.addColorStop(0, "rgba(52,211,153,0.9)");
-        g.addColorStop(1, "rgba(52,211,153,0)");
+        g.addColorStop(0, "rgba(45,212,191,0.9)");
+        g.addColorStop(1, "rgba(45,212,191,0)");
         ctx.fillStyle = g;
         ctx.beginPath();
         ctx.arc(X(orb.x), Y(orb.y), r * 2.2, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = "#34d399";
+        ctx.fillStyle = "#2dd4bf";
         ctx.beginPath();
         ctx.arc(X(orb.x), Y(orb.y), r, 0, Math.PI * 2);
         ctx.fill();
@@ -271,17 +271,17 @@ export default function ArenaBoard({ game, you, finished, ping, onMove }: Props)
           }
         }
         const meta = gameRef.current.players.find((m) => m.sessionId === p.sessionId);
-        const color = meta?.avatarColor ?? "#22d3ee";
+        const color = meta?.avatarColor ?? "#ff6b4a";
         ctx.fillStyle = color;
         ctx.beginPath();
         ctx.roundRect(X(px) - size / 2, Y(py) - size / 2, size, size, 6 * scale);
         ctx.fill();
         if (p.sessionId === you) {
-          ctx.strokeStyle = "#e8ecf4";
+          ctx.strokeStyle = "#f6ecff";
           ctx.lineWidth = 2;
           ctx.stroke();
         }
-        ctx.fillStyle = "#e8ecf4";
+        ctx.fillStyle = "#f6ecff";
         ctx.font = `${Math.max(10, 11 * scale)}px Inter, sans-serif`;
         ctx.textAlign = "center";
         ctx.fillText(

@@ -94,10 +94,10 @@ export default function Stage({
     <div className="pointer-events-auto flex flex-col items-center gap-2.5">
       <button
         onClick={() => onReady(!me?.ready)}
-        className={`rounded-xl px-7 py-3 font-semibold transition active:scale-[0.98] ${
+        className={`rounded-2xl px-8 py-3 font-bold transition active:scale-[0.98] ${
           me?.ready
             ? "bg-success/15 text-success ring-1 ring-success/40"
-            : "bg-accent text-bg hover:brightness-110"
+            : "bg-brand glow-accent text-white hover:brightness-110"
         }`}
       >
         {me?.ready ? "✓ Ready — tap to cancel" : "I'm ready"}
@@ -106,7 +106,7 @@ export default function Stage({
         <button
           onClick={onStart}
           disabled={!allReady || !enoughPlayers}
-          className="rounded-xl bg-accent-2 px-7 py-3 font-semibold text-bg transition hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-2xl bg-accent-3 px-8 py-3 font-bold text-bg-deep transition hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
           title={
             !enoughPlayers
               ? `${selected?.displayName} needs at least ${selected?.minPlayers} players`
@@ -126,40 +126,44 @@ export default function Stage({
   );
 
   const picker = (
-    <div className="pointer-events-auto">
-      <p className="mb-3 text-center text-sm text-ink-muted">
-        {isOwner ? "Pick a game" : "The host picks the game"}
+    <div className="pointer-events-auto w-full max-w-xl px-1">
+      <p className="mb-3 text-center text-sm font-medium text-ink-muted">
+        {isOwner ? "🎯 Pick a game" : "Waiting for the host to pick a game…"}
       </p>
-      <div className="flex flex-wrap justify-center gap-3">
-        {GAME_LIST.map((g) => (
-          <button
-            key={g.key}
-            onClick={() => isOwner && onSelectGame(room.gameKey === g.key ? null : g.key)}
-            disabled={!isOwner}
-            className={`w-44 rounded-2xl p-4 text-left backdrop-blur-md transition ${
-              room.gameKey === g.key
-                ? "bg-accent/15 ring-2 ring-accent"
-                : "bg-surface-raised/70 " + (isOwner ? "hover:bg-line/60" : "")
-            }`}
-          >
-            <div className="text-2xl">{g.icon}</div>
-            <div className="mt-1.5 font-semibold">{g.displayName}</div>
-            <div className="mt-0.5 text-xs text-ink-muted">{g.description}</div>
-            <div className="mt-1 text-[10px] text-ink-muted">
-              {g.minPlayers === g.maxPlayers
-                ? `${g.minPlayers} players`
-                : `${g.minPlayers}–${g.maxPlayers} players`}
-            </div>
-          </button>
-        ))}
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-2">
+        {GAME_LIST.map((g) => {
+          const active = room.gameKey === g.key;
+          return (
+            <button
+              key={g.key}
+              onClick={() => isOwner && onSelectGame(active ? null : g.key)}
+              disabled={!isOwner}
+              className={`rounded-2xl p-3.5 text-left backdrop-blur-md transition active:scale-[0.98] ${
+                active
+                  ? "bg-accent/15 shadow-[0_0_0_2px_var(--color-accent),0_8px_28px_-8px_var(--color-accent)]"
+                  : "bg-surface-raised/70 ring-1 ring-line/50 " +
+                    (isOwner ? "hover:bg-line/50 hover:ring-accent-2/40" : "")
+              }`}
+            >
+              <div className="text-2xl">{g.icon}</div>
+              <div className="mt-1.5 text-sm font-semibold">{g.displayName}</div>
+              <div className="mt-0.5 line-clamp-2 text-xs text-ink-muted">{g.description}</div>
+              <div className="mt-1.5 text-[10px] font-medium tracking-wide text-accent-3 uppercase">
+                {g.minPlayers === g.maxPlayers
+                  ? `${g.minPlayers} players`
+                  : `${g.minPlayers}–${g.maxPlayers} players`}
+              </div>
+            </button>
+          );
+        })}
         {COMING_SOON.map((g) => (
           <div
             key={g.key}
-            className="w-44 rounded-2xl bg-surface-raised/40 p-4 opacity-50 backdrop-blur-md"
+            className="rounded-2xl bg-surface-raised/40 p-3.5 opacity-50 backdrop-blur-md"
             title="Coming soon"
           >
             <div className="text-2xl">🔒</div>
-            <div className="mt-1.5 font-semibold">{g.displayName}</div>
+            <div className="mt-1.5 text-sm font-semibold">{g.displayName}</div>
             <div className="mt-0.5 text-xs text-ink-muted">Coming in {g.note}</div>
           </div>
         ))}

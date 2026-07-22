@@ -296,9 +296,9 @@ export default function ShooterBoard({ game, you, finished, ping, onMove }: Prop
       const Y = (y: number) => oy + y * scale;
 
       ctx.clearRect(0, 0, w, h);
-      ctx.fillStyle = "#0e1320";
+      ctx.fillStyle = "#160c26";
       ctx.fillRect(ox, oy, SHOOTER_WORLD.width * scale, SHOOTER_WORLD.height * scale);
-      ctx.strokeStyle = "rgba(35,44,63,0.5)";
+      ctx.strokeStyle = "rgba(61,42,92,0.5)";
       ctx.lineWidth = 1;
       for (let gx = 0; gx <= SHOOTER_WORLD.width; gx += 90) {
         ctx.beginPath();
@@ -315,8 +315,8 @@ export default function ShooterBoard({ game, you, finished, ping, onMove }: Prop
 
       // Obstacles.
       for (const o of OBSTACLES) {
-        ctx.fillStyle = "#1a2130";
-        ctx.strokeStyle = "rgba(34,211,238,0.35)";
+        ctx.fillStyle = "#241539";
+        ctx.strokeStyle = "rgba(255,61,129,0.4)";
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.roundRect(X(o.x), Y(o.y), o.w * scale, o.h * scale, 4 * scale);
@@ -330,7 +330,7 @@ export default function ShooterBoard({ game, you, finished, ping, onMove }: Prop
         const px = pr.x + pr.vx * age;
         const py = pr.y + pr.vy * age;
         const owner = gameRef.current.players.find((m) => m.sessionId === pr.ownerId);
-        const color = owner?.avatarColor ?? "#22d3ee";
+        const color = owner?.avatarColor ?? "#ff6b4a";
         const r = PROJECTILE_RADIUS * scale;
         const g = ctx.createRadialGradient(X(px), Y(py), 0, X(px), Y(py), r * 3);
         g.addColorStop(0, color);
@@ -364,7 +364,7 @@ export default function ShooterBoard({ game, you, finished, ping, onMove }: Prop
           }
         }
         const meta = gameRef.current.players.find((m) => m.sessionId === p.sessionId);
-        const color = meta?.avatarColor ?? "#22d3ee";
+        const color = meta?.avatarColor ?? "#ff6b4a";
         const invuln = nowMs < p.invulnUntil;
 
         ctx.globalAlpha = invuln ? 0.55 + 0.35 * Math.sin(nowMs / 90) : 1;
@@ -387,18 +387,18 @@ export default function ShooterBoard({ game, you, finished, ping, onMove }: Prop
         ctx.roundRect(X(px) - size / 2, Y(py) - size / 2, size, size, 6 * scale);
         ctx.fill();
         if (p.sessionId === you) {
-          ctx.strokeStyle = "#e8ecf4";
+          ctx.strokeStyle = "#f6ecff";
           ctx.lineWidth = 2;
           ctx.stroke();
         }
         ctx.globalAlpha = 1;
         // HP bar + name.
         const bw = size * 1.2;
-        ctx.fillStyle = "rgba(11,14,20,0.7)";
+        ctx.fillStyle = "rgba(18,10,31,0.72)";
         ctx.fillRect(X(px) - bw / 2, Y(py) - size / 2 - 10 * scale, bw, 4 * scale);
-        ctx.fillStyle = p.hp > 50 ? "#34d399" : p.hp > 25 ? "#fbbf24" : "#fb7185";
+        ctx.fillStyle = p.hp > 50 ? "#2dd4bf" : p.hp > 25 ? "#ffd24a" : "#f43f5e";
         ctx.fillRect(X(px) - bw / 2, Y(py) - size / 2 - 10 * scale, (bw * p.hp) / MAX_HP, 4 * scale);
-        ctx.fillStyle = "#e8ecf4";
+        ctx.fillStyle = "#f6ecff";
         ctx.font = `${Math.max(9, 10 * scale)}px Inter, sans-serif`;
         ctx.textAlign = "center";
         ctx.fillText(p.sessionId === you ? "you" : (meta?.name ?? ""), X(px), Y(py) - size / 2 - 14 * scale);

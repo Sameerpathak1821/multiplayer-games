@@ -1,19 +1,23 @@
 @import "tailwindcss";
 
 /*
- * GameHub design tokens — dark-first "arcade table in space" theme.
+ * GameHub design tokens — "Sunset Synthwave": dark indigo base, warm
+ * coral→pink gradients, teal counter-accent. Tuned for mobile OLED.
  */
 @theme {
-  --color-bg: #0b0e14;
-  --color-surface: #121722;
-  --color-surface-raised: #1a2130;
-  --color-line: #232c3f;
-  --color-ink: #e8ecf4;
-  --color-ink-muted: #8b95a9;
-  --color-accent: #22d3ee;
-  --color-accent-2: #a78bfa;
-  --color-danger: #fb7185;
-  --color-success: #34d399;
+  --color-bg: #120a1f;
+  --color-bg-deep: #0b0613;
+  --color-surface: #1e1330;
+  --color-surface-raised: #2a1a42;
+  --color-line: #3d2a5c;
+  --color-ink: #f6ecff;
+  --color-ink-muted: #a892c4;
+
+  --color-accent: #ff6b4a; /* coral orange */
+  --color-accent-2: #ff3d81; /* sunset pink */
+  --color-accent-3: #2dd4bf; /* teal */
+  --color-danger: #f43f5e;
+  --color-success: #2dd4bf;
 
   --font-display: "Space Grotesk", system-ui, sans-serif;
   --font-sans: "Inter", system-ui, sans-serif;
@@ -25,6 +29,11 @@ body,
   height: 100%;
 }
 
+html {
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   background: var(--color-bg);
   color: var(--color-ink);
@@ -32,16 +41,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* No double-tap zoom; keep text size stable on orientation change. */
-html {
-  touch-action: manipulation;
-  -webkit-text-size-adjust: 100%;
-}
-
-/*
- * Mobile browsers auto-zoom into any focused input with font-size < 16px.
- * Force 16px on touch devices so tapping chat/code/name fields never zooms.
- */
+/* Mobile browsers auto-zoom into focused inputs < 16px. */
 @media (pointer: coarse) {
   input,
   select,
@@ -50,14 +50,141 @@ html {
   }
 }
 
-/* Frosted-glass panel — the DOM layer that floats above the 3D scene. */
-.glass {
-  background: color-mix(in srgb, var(--color-surface) 72%, transparent);
-  backdrop-filter: blur(16px);
-  border: 1px solid color-mix(in srgb, var(--color-line) 80%, transparent);
+/* ---- Brand gradient helpers ---- */
+.text-gradient {
+  background: linear-gradient(115deg, var(--color-accent) 0%, var(--color-accent-2) 55%, #c07cff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
-/* Emoji reaction burst: floats up from the bottom of the stage and fades. */
+.bg-brand {
+  background: linear-gradient(115deg, var(--color-accent), var(--color-accent-2));
+}
+
+.glow-accent {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-accent) 40%, transparent),
+    0 8px 30px -6px color-mix(in srgb, var(--color-accent) 55%, transparent);
+}
+
+/* Frosted-glass panel — warmer for the synthwave base. */
+.glass {
+  background: color-mix(in srgb, var(--color-surface) 68%, transparent);
+  backdrop-filter: blur(16px);
+  border: 1px solid color-mix(in srgb, var(--color-line) 75%, transparent);
+}
+
+.glass-strong {
+  background: color-mix(in srgb, var(--color-surface-raised) 82%, transparent);
+  backdrop-filter: blur(20px);
+  border: 1px solid color-mix(in srgb, var(--color-accent-2) 20%, transparent);
+}
+
+/* ---- Animated aurora backdrop (behind non-3D content) ---- */
+.aurora {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+.aurora::before,
+.aurora::after {
+  content: "";
+  position: absolute;
+  width: 60vmax;
+  height: 60vmax;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.4;
+  will-change: transform;
+}
+.aurora::before {
+  background: radial-gradient(circle, var(--color-accent) 0%, transparent 65%);
+  top: -20vmax;
+  left: -10vmax;
+  animation: drift-a 18s ease-in-out infinite alternate;
+}
+.aurora::after {
+  background: radial-gradient(circle, var(--color-accent-2) 0%, transparent 65%);
+  bottom: -25vmax;
+  right: -12vmax;
+  animation: drift-b 22s ease-in-out infinite alternate;
+}
+
+@keyframes drift-a {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(12vmax, 8vmax, 0) scale(1.25);
+  }
+}
+@keyframes drift-b {
+  from {
+    transform: translate3d(0, 0, 0) scale(1.1);
+  }
+  to {
+    transform: translate3d(-10vmax, -6vmax, 0) scale(0.9);
+  }
+}
+
+/* Synthwave horizon grid (pure CSS, cheap, decorative). */
+.retro-grid {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 45%;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--color-accent-2) 22%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--color-accent) 18%, transparent) 1px, transparent 1px);
+  background-size: 44px 44px;
+  transform: perspective(340px) rotateX(60deg);
+  transform-origin: bottom;
+  mask-image: linear-gradient(to top, black, transparent 85%);
+  -webkit-mask-image: linear-gradient(to top, black, transparent 85%);
+}
+
+/* ---- Motion utilities ---- */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.rise {
+  animation: rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.rise-1 {
+  animation-delay: 0.06s;
+}
+.rise-2 {
+  animation-delay: 0.14s;
+}
+.rise-3 {
+  animation-delay: 0.22s;
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 55%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 22px 4px color-mix(in srgb, var(--color-accent) 45%, transparent);
+  }
+}
+.pulse-glow {
+  animation: pulse-glow 2.4s ease-in-out infinite;
+}
+
+/* Emoji reaction burst. */
 @keyframes reaction-float {
   0% {
     transform: translateY(0) scale(0.6);
@@ -72,7 +199,6 @@ html {
     opacity: 0;
   }
 }
-
 .reaction-float {
   animation: reaction-float 2.4s ease-out forwards;
 }
@@ -95,7 +221,6 @@ html {
     opacity: 0;
   }
 }
-
 .countdown-pop {
   animation: countdown-pop 0.95s ease-out forwards;
 }

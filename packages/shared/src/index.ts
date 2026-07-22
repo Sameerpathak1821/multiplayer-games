@@ -28,17 +28,18 @@ export const guestAuthResponseSchema = z.object({
 export type GuestAuthResponse = z.infer<typeof guestAuthResponseSchema>;
 
 /**
- * Avatar palette — one electric accent per player, readable on the dark theme.
+ * Avatar palette — vivid sunset-synthwave hues, readable on the dark indigo
+ * theme. One per player.
  */
 export const AVATAR_COLORS = [
-  "#22d3ee", // cyan
-  "#a78bfa", // violet
-  "#f472b6", // pink
-  "#34d399", // emerald
-  "#fbbf24", // amber
-  "#fb7185", // rose
-  "#60a5fa", // blue
-  "#c084fc", // purple
+  "#ff6b4a", // coral
+  "#ff3d81", // sunset pink
+  "#ffa63d", // amber orange
+  "#2dd4bf", // teal
+  "#c07cff", // purple
+  "#5eb3ff", // sky
+  "#ffd24a", // gold
+  "#ff5c8a", // rose
 ] as const;
 
 /** Player-editable profile fields (no accounts — this is all there is). */

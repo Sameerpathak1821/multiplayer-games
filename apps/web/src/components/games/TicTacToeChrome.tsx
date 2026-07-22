@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { TicTacToeState } from "@gamehub/games/client";
 import type { GameStateMsg } from "../../lib/room";
 
-export const SEAT_COLORS = { X: "var(--color-accent)", O: "var(--color-accent-2)" } as const;
+export const SEAT_COLORS = { X: "var(--color-accent)", O: "var(--color-accent-3)" } as const;
 
 export function useSecondsLeft(deadline: number | undefined): number | null {
   const [left, setLeft] = useState<number | null>(null);

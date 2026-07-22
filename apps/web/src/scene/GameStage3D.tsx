@@ -13,8 +13,8 @@ import { maxDpr } from "../lib/quality";
  * one camera, so the transition is a real flythrough.
  */
 
-const SEAT_COLOR = { X: "#22d3ee", O: "#a78bfa" } as const;
-const SEAT_BASE = { X: "#0e7490", O: "#6d28d9" } as const;
+const SEAT_COLOR = { X: "#ff6b4a", O: "#2dd4bf" } as const;
+const SEAT_BASE = { X: "#7c2d12", O: "#0f766e" } as const;
 
 const CELL_SPACING = 1.16;
 const PIECE_REST_Y = 0.3;
@@ -150,10 +150,10 @@ function Board3D({ board, turnSeat, winLine, canPlay, onCellClick }: BoardProps)
               }}
             >
               <meshStandardMaterial
-                color={isHover ? "#243147" : "#1a2130"}
-                emissive={isHover ? "#22d3ee" : inWin ? "#22d3ee" : "#0b0e14"}
-                emissiveIntensity={isHover ? 0.25 : inWin ? 0.15 : 0.1}
-                roughness={0.55}
+                color={isHover ? "#3a2456" : "#241539"}
+                emissive={isHover ? "#ff6b4a" : inWin ? "#ff3d81" : "#120a1f"}
+                emissiveIntensity={isHover ? 0.3 : inWin ? 0.25 : 0.12}
+                roughness={0.5}
               />
             </RoundedBox>
             {cell && (
@@ -188,7 +188,7 @@ function LobbyCenterpiece() {
       </Float>
       <Float speed={0.9} rotationIntensity={0.5} floatIntensity={0.9}>
         <RoundedBox args={[0.55, 0.55, 0.55]} radius={0.07} position={[0.1, -0.35, 0.9]}>
-          <meshStandardMaterial color="#1a2130" emissive="#34d399" emissiveIntensity={0.35} />
+          <meshStandardMaterial color="#241539" emissive="#2dd4bf" emissiveIntensity={0.4} />
         </RoundedBox>
       </Float>
     </group>
@@ -223,13 +223,14 @@ export default function GameStage3D({
     >
       <CameraRig phase={phase} />
       <ambientLight intensity={0.5} />
-      <directionalLight position={[4, 7, 3]} intensity={1.15} />
-      <pointLight position={[-5, 3, 3]} color="#22d3ee" intensity={22} />
-      <pointLight position={[5, 3, -2]} color="#a78bfa" intensity={18} />
+      <directionalLight position={[4, 7, 3]} intensity={1.1} color="#ffd9c2" />
+      <pointLight position={[-5, 3, 3]} color="#ff6b4a" intensity={26} />
+      <pointLight position={[5, 3, -2]} color="#ff3d81" intensity={22} />
+      <pointLight position={[0, 2, -5]} color="#2dd4bf" intensity={14} />
 
       {/* The table */}
       <RoundedBox args={[7.4, 0.34, 7.4]} radius={0.12} position={[0, -0.26, 0]}>
-        <meshStandardMaterial color="#10151f" metalness={0.35} roughness={0.6} />
+        <meshStandardMaterial color="#1a1030" metalness={0.35} roughness={0.55} />
       </RoundedBox>
       <ContactShadows position={[0, -0.46, 0]} opacity={0.5} scale={16} blur={2.2} far={5} />
 
